@@ -1,0 +1,77 @@
+# Copy this file to benchmark.yaml and export both API keys before running.
+# One provider can also be configured with a singular `provider:` block.
+providers:
+  - name: official
+    base_url: https://official.example.com/v1
+    api_key: ${OFFICIAL_API_KEY}
+    model: model-name
+  - name: candidate
+    base_url: https://candidate.example.com/v1
+    api_key: ${CANDIDATE_API_KEY}
+    model: model-name
+
+reference_provider: official
+
+benchmarks:
+  compatibility:
+    enabled: true
+    max_tokens: 64
+  latency:
+    enabled: true
+    warmup: 1
+    repetitions: 10
+    prompt: "用三点说明一个可靠 API 应具备哪些特征。"
+    max_tokens: 128
+  concurrency:
+    enabled: false
+    levels: [1, 2, 4, 8, 16, 32, 64, 128]
+    requests_per_level: 8
+    stable_success_rate: 0.995
+    stable_ttft_p95_ms: 3000
+  burst:
+    enabled: false
+    sizes: [10, 25, 50, 100]
+    max_tokens: 16
+  quality:
+    enabled: false
+    datasets: [builtin:core]
+    categories: [math, reasoning, chinese_knowledge, code, instruction_following, json]
+    concurrency: 4
+  tool_calling:
+    enabled: false
+  structured_output:
+    enabled: false
+    strict: true
+  model_identity:
+    enabled: false
+    repetitions: 2
+    expected_model_patterns: []
+  billing:
+    enabled: false
+    tokenizer_encoding: cl100k_base
+    allowed_deviation: 0.05
+    provider_prices:
+      official: {input_per_million: 0, output_per_million: 0}
+      candidate: {input_per_million: 0, output_per_million: 0}
+
+output_dir: outputs
+
+scoring:
+  latency_ttft_good_ms: 1000
+  latency_ttft_fail_ms: 10000
+  output_tps_target: 20
+  warn_score_below: 80
+  fail_score_below: 60
+  gates:
+    - metric: compatibility.success_rate
+      operator: ">="
+      value: 0.95
+      severity: fail
+    - metric: latency.success_rate
+      operator: ">="
+      value: 0.995
+      severity: fail
+    - metric: latency.ttft_ms.p95
+      operator: "<"
+      value: 3000
+      severity: warn

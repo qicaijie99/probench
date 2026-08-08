@@ -1,0 +1,63 @@
+- id: math-arithmetic-01
+  category: math
+  prompt: "计算 (17 × 6) - 60。只输出数字。"
+  evaluator: numeric
+  expected: 42
+  tolerance: 0
+  max_tokens: 16
+
+- id: reasoning-logic-01
+  category: reasoning
+  prompt: "所有 A 都是 B，没有 B 是 C。能否推出没有 A 是 C？只回答 YES 或 NO。"
+  evaluator: exact_match
+  expected: "YES"
+  max_tokens: 16
+
+- id: chinese-knowledge-01
+  category: chinese_knowledge
+  prompt: "《滕王阁序》的作者是谁？只输出姓名。"
+  evaluator: exact_match
+  expected: "王勃"
+  max_tokens: 16
+
+- id: code-python-01
+  category: code
+  prompt: "仅输出 Python 代码，定义函数 add(a, b)，返回两个参数之和。不要导入模块。"
+  evaluator: code_test
+  code_tests:
+    - "assert add(2, 3) == 5"
+    - "assert add(-2, 2) == 0"
+    - "assert add('a', 'b') == 'ab'"
+  max_tokens: 128
+
+- id: instruction-following-01
+  category: instruction_following
+  prompt: "严格只输出单词 BLUE，不要标点，不要解释。"
+  evaluator: exact_match
+  expected: "BLUE"
+  max_tokens: 16
+
+- id: json-basic-01
+  category: json
+  prompt: "只输出 JSON：对象包含 name='Ada' 和整数 age=36。"
+  evaluator: json_validator
+  expected:
+    name: Ada
+    age: 36
+  json_schema:
+    type: object
+    properties:
+      name: {type: string}
+      age: {type: integer}
+    required: [name, age]
+    additionalProperties: false
+  max_tokens: 64
+
+- id: instruction-judge-01
+  category: instruction_following
+  prompt: "用不超过 30 个汉字解释为什么 API 超时需要被记录。"
+  evaluator: llm_judge
+  rubric: "答案必须是中文、不超过30个汉字，并准确说明记录超时有助于可靠性分析或故障诊断。"
+  pass_threshold: 0.8
+  max_tokens: 64
+
