@@ -96,12 +96,18 @@ class BillingPlugin(BenchmarkPlugin[BillingSettings]):
         local_completion = len(self.encoding.encode(str(record.response.get("content") or "")))
         reported_prompt = record.usage.prompt_tokens if record.usage else None
         reported_completion = record.usage.completion_tokens if record.usage else None
+        reasoning_tokens = record.usage.reasoning_tokens if record.usage else None
+        reported_completion_visible = (
+            reported_completion - reasoning_tokens
+            if reported_completion is not None and reasoning_tokens is not None
+            else reported_completion
+        )
 
         def deviation(reported: int | None, local: int) -> float | None:
             return (reported - local) / local if reported is not None and local else None
 
         prompt_deviation = deviation(reported_prompt, local_prompt)
-        completion_deviation = deviation(reported_completion, local_completion)
+        completion_deviation = deviation(reported_completion_visible, local_completion)
         within = (
             prompt_deviation is not None
             and completion_deviation is not None
@@ -138,6 +144,7 @@ class BillingPlugin(BenchmarkPlugin[BillingSettings]):
             "prompt_deviation": prompt_deviation,
             "reported_completion_tokens": reported_completion,
             "local_completion_tokens": local_completion,
+            "reasoning_tokens": reasoning_tokens,
             "completion_deviation": completion_deviation,
             "within_tolerance": within,
             "estimated_cost_usd": cost,

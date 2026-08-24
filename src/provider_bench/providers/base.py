@@ -24,9 +24,11 @@ class Provider(ABC):
         max_tokens: int = 128,
         temperature: float = 0,
         tools: list[dict[str, Any]] | None = None,
-        tool_choice: str | dict[str, Any] | None = None,
+        tool_choice: str | dict[str, Any] | list[str] | None = None,
         response_format: dict[str, Any] | None = None,
         seed: int | None = None,
+        extra: dict[str, Any] | None = None,
+        omit_temperature: bool = False,
     ) -> RequestRecord:
         raise NotImplementedError
 

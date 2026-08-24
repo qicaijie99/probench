@@ -59,11 +59,23 @@ class LatencyPlugin(BenchmarkPlugin[LatencySettings]):
     def aggregate(self, raw_result: list[RequestRecord]) -> dict[str, Any]:
         successful = [record for record in raw_result if record.status == "success"]
         itl_values = [value for record in successful for value in record.itl_ms]
+        details = [
+            {
+                "case_id": record.case_id,
+                "ttft_ms": record.ttft_ms,
+                "ttfb_ms": record.ttfb_ms,
+                "e2e_ms": record.e2e_ms,
+            }
+            for record in successful
+            if record.ttft_ms is not None
+        ]
         return {
             **status_counts(raw_result),
+            "ttfb_ms": distribution(record.ttfb_ms for record in successful),
             "ttft_ms": distribution(record.ttft_ms for record in successful),
             "tpot_ms": distribution(record.tpot_ms for record in successful),
             "itl_ms": distribution(itl_values),
             "e2e_ms": distribution(record.e2e_ms for record in successful),
             "output_tps": distribution(record.tps for record in successful),
+            "details": details,
         }

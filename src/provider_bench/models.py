@@ -57,8 +57,15 @@ class ScoringConfig(BaseModel):
             "throughput": 10.0,
             "concurrency": 15.0,
             "reliability": 10.0,
-            "compatibility": 8.0,
-            "tool_calling": 5.0,
+            "compatibility": 4.0,
+            "protocol": 4.0,
+            "structured_output": 4.0,
+            "tool_calling": 3.0,
+            "tool_choice": 2.0,
+            "features_thinking": 3.0,
+            "features_param": 2.0,
+            "cache": 5.0,
+            "model_identity": 3.0,
             "billing": 4.0,
             "cost": 3.0,
         }
@@ -120,6 +127,9 @@ class Usage(BaseModel):
     prompt_tokens: int | None = None
     completion_tokens: int | None = None
     total_tokens: int | None = None
+    cached_tokens: int | None = None
+    reasoning_tokens: int | None = None
+    details: dict[str, Any] = Field(default_factory=dict)
 
 
 class RequestRecord(BaseModel):
@@ -129,6 +139,7 @@ class RequestRecord(BaseModel):
     start_time: datetime
     first_token_time: datetime | None = None
     end_time: datetime
+    ttfb_ms: float | None = None
     ttft_ms: float | None = None
     tpot_ms: float | None = None
     itl_ms: list[float] = Field(default_factory=list)

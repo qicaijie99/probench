@@ -18,12 +18,16 @@ async def test_web_exposes_health_and_dynamic_registry() -> None:
     assert health.json() == {"status": "ok"}
     names = {plugin["name"] for plugin in plugins.json()}
     assert names == {
+        "benchmark",
         "billing",
         "burst",
+        "cache",
         "compatibility",
         "concurrency",
+        "features",
         "latency",
         "model_identity",
+        "protocol",
         "quality",
         "structured_output",
         "tool_calling",

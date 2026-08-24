@@ -83,8 +83,28 @@ benchmarks:
     concurrency: 4
   tool_calling:
     enabled: false
+    branches: [default, auto, required, none, function, allowed_tools]
   structured_output:
     enabled: false
+  features:
+    enabled: false
+    reasoning_effort_levels: [low, high, max]
+  protocol:
+    enabled: false
+    checks: [ping, stream_integrity, usage_stream, image_base64, video_base64]
+  cache:
+    enabled: false
+    prefix_chars: 4096
+    rounds: 2
+  benchmark:
+    enabled: false
+    sessions: 4
+    turns: 3
+    init_tokens: 32000
+    output_tokens: 346
+    arrival_start: 0.08
+    arrival_end: 0.2
+    ramp_seconds: 15.0
   model_identity:
     enabled: false
     repetitions: 2

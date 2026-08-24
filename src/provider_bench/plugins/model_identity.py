@@ -16,7 +16,7 @@ from provider_bench.plugins.registry import register_plugin
 class IdentityProbe(BaseModel):
     id: str
     prompt: str
-    max_tokens: int = Field(default=96, gt=0)
+    max_tokens: int = Field(default=512, gt=0)
 
     model_config = ConfigDict(extra="forbid")
 
@@ -55,7 +55,12 @@ class ModelIdentitySettings(PluginSettings):
 
 
 def _normalize(value: str) -> str:
-    return " ".join(value.casefold().split())
+    text = value.strip()
+    if text.startswith("```"):
+        lines = text.splitlines()
+        body = [line for line in lines[1:-1] if line and not line.strip().startswith("```")]
+        text = "\n".join(body).strip()
+    return " ".join(text.casefold().split())
 
 
 def _similarity(left: str, right: str) -> float:

@@ -25,6 +25,7 @@ def distribution(values: Iterable[float | int | None]) -> dict[str, float | None
     samples = [float(value) for value in values if value is not None]
     return {
         "p50": percentile(samples, 0.50),
+        "p75": percentile(samples, 0.75),
         "p90": percentile(samples, 0.90),
         "p95": percentile(samples, 0.95),
         "p99": percentile(samples, 0.99),
@@ -42,8 +43,10 @@ def status_counts(records: list[RequestRecord]) -> dict[str, Any]:
         "rate_limited": sum(record.status == "rate_limited" for record in records),
         "server_errors": sum(record.status == "server_error" for record in records),
         "timeouts": sum(record.status == "timeout" for record in records),
+        "ssl_errors": sum(record.status == "ssl_error" for record in records),
         "other_errors": sum(
-            record.status not in {"success", "rate_limited", "server_error", "timeout"}
+            record.status
+            not in {"success", "rate_limited", "server_error", "timeout", "ssl_error"}
             for record in records
         ),
     }

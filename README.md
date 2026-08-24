@@ -20,7 +20,7 @@ Provider Bench 是一个面向任意 OpenAI-compatible API 的异步 Benchmark �
 
 - 单 Provider 测试或多 Provider 横向对比，支持指定基线 Provider
 - OpenAI-compatible `/models` 与 `/chat/completions` 接口
-- Compatibility、Latency、Concurrency、Burst、Quality、Tool Calling、Structured Output、Model Identity、Billing 九个插件
+- Compatibility、Protocol、Features、Cache、Latency、Concurrency、Burst、Benchmark、Quality、Tool Calling、Structured Output、Model Identity、Billing 十三个插件
 - TTFT、TPOT、ITL、E2E、Output TPS 及 P50/P90/P95/P99
 - Success Rate、429、5xx、Timeout、最大稳定并发和突发批次统计
 - 内置数学、推理、中文知识、代码、指令遵循和 JSON 数据集
@@ -281,11 +281,15 @@ provider:
 | 插件 | 主要用途 | 关键配置 | 调用量/风险 |
 | --- | --- | --- | --- |
 | `compatibility` | 检查 models、流式/非流式、多轮、System、usage、finish reason、工具调用和 JSON 输出 | `checks`、`max_tokens` | 低，建议第一个运行 |
+| `protocol` | 探活、Stream 完整性（SSE chunks + `[DONE]`）、流式 usage、多模态 image/video base64 | `checks`、`max_tokens` | 低 |
+| `features` | 思考开关、reasoning_effort 三档、采样参数约束（固定值/应拒绝值） | `reasoning_effort_levels`、`thinking_variants`、`param_cases` | 中 |
+| `cache` | Prefix Cache 命中率：预热 + 测量轮，长文固定前缀 + 随机后缀 | `prefix_chars`、`rounds`、`warmup` | 中 |
 | `latency` | 统计 TTFT、TPOT、ITL、E2E 和输出 TPS 分布 | `warmup`、`repetitions`、`prompt`、`max_tokens` | 低到中 |
 | `concurrency` | 阶梯并发和最大稳定并发 | `levels`、`requests_per_level`、稳定性阈值 | 高，可能触发 429 |
 | `burst` | 同时发起不同规模的突发批次 | `sizes`、`max_tokens` | 高，可能触发限流和费用 |
+| `benchmark` | 会话/轮次 + 到达率压测：TTFB、输入/输出 token 吞吐、分轮次缓存、RPS/TPM | `sessions`、`turns`、`init_tokens`、`arrival_*`、`ramp_seconds` | 高，可能触发限流和费用 |
 | `quality` | 使用内置或自定义数据集评估模型质量 | `datasets`、`categories`、`evaluators`、`max_cases`、`concurrency` | 取决于用例数；LLM Judge 会增加请求 |
-| `tool_calling` | 检查工具选择、参数 JSON 和 Schema 合规 | `cases`、`concurrency`、`max_tokens` | 中 |
+| `tool_calling` | 检查工具选择、参数 JSON、Schema 合规，以及 tool_choice 全分支 | `cases`、`branches`、`concurrency`、`max_tokens` | 中 |
 | `structured_output` | 检查 JSON Object、JSON Schema 和嵌套结构 | `cases`、`strict`、`concurrency` | 中 |
 | `model_identity` | 检查响应模型名、指纹、确定性探针和行为漂移 | `probes`、`repetitions`、期望模型/指纹 | 中；结论是启发式证据 |
 | `billing` | 比较 Provider usage 与本地 Token 计数并估算成本 | Tokenizer、允许偏差、Provider 价格 | 低 |
@@ -489,7 +493,7 @@ Token 估算依赖所选模型或 `tokenizer_encoding`。不同 Provider 的服�
 
 ## 评分、Hard Gate 与验收结论
 
-平台只对本次有可用指标的评分组件应用权重，并在这些组件之间自动归一化。常用组件包括 Quality、Latency、Throughput、Concurrency、Reliability、Compatibility、Tool Calling、Billing 和 Cost。
+平台只对本次有可用指标的评分组件应用权重，并在这些组件之间自动归一化。常用组件包括 Quality、Latency、Throughput、Concurrency、Reliability、Compatibility、Tool Calling、Features、Cache、Billing 和 Cost。
 
 ```yaml
 scoring:
@@ -501,6 +505,8 @@ scoring:
     reliability: 10
     compatibility: 8
     tool_calling: 5
+    features: 5
+    cache: 5
     billing: 4
     cost: 3
   latency_ttft_good_ms: 1000

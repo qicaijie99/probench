@@ -106,7 +106,10 @@ def _default_cases() -> list[ToolCallingCase]:
 class ToolCallingSettings(PluginSettings):
     cases: list[ToolCallingCase] = Field(default_factory=_default_cases)
     concurrency: int = Field(default=3, gt=0, le=32)
-    max_tokens: int = Field(default=128, gt=0)
+    max_tokens: int = Field(default=512, gt=0)
+    branches: list[str] = Field(
+        default_factory=lambda: ["default", "auto", "required", "none", "function", "allowed_tools"]
+    )
 
 
 def _expected_subset(expected: Any, actual: Any) -> bool:
@@ -198,27 +201,117 @@ class ToolCallingPlugin(BenchmarkPlugin[ToolCallingSettings]):
             "error": record.error,
         }
 
-    async def run(self) -> list[dict[str, Any]]:
+    async def _branch_tools(self) -> list[dict[str, Any]]:
+        def function_tool(name: str, description: str, parameters: dict[str, Any]) -> dict[str, Any]:
+            return {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": description,
+                    "parameters": parameters,
+                },
+            }
+
+        city = {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+            "additionalProperties": False,
+        }
+        return [
+            function_tool("get_weather", "查询城市天气", city),
+            function_tool("get_time", "查询城市时间", city),
+        ]
+
+    async def _run_branch(self, branch: str) -> dict[str, Any]:
+        tools = await self._branch_tools()
+        tool_choice: str | dict[str, Any] | list[str] | None = {
+            "default": None,
+            "auto": "auto",
+            "required": "required",
+            "none": "none",
+            "function": {"type": "function", "function": {"name": "get_weather"}},
+            "allowed_tools": ["get_weather"],
+        }.get(branch)
+        record = await self.context.provider.chat(
+            case_id=f"tool_calling.branch.{branch}",
+            messages=[{"role": "user", "content": "北京今天天气怎么样？请按需使用工具。"}],
+            stream=False,
+            max_tokens=self.settings.max_tokens,
+            temperature=0,
+            tools=tools,
+            tool_choice=tool_choice,
+        )
+        await self.context.record(record)
+        calls = record.response.get("tool_calls") or []
+        names = [
+            (call_.get("function") or {}).get("name")
+            for call_ in calls
+            if isinstance(call_, dict)
+        ]
+        names = [name for name in names if name]
+        http_ok = record.status == "success"
+        has_tool_calls = bool(names)
+        allowed = {"get_weather"}
+        branch_ok = {
+            "default": http_ok,
+            "auto": http_ok,
+            "required": http_ok and has_tool_calls,
+            "none": http_ok and not has_tool_calls,
+            "function": http_ok and names[:1] == ["get_weather"],
+            "allowed_tools": http_ok and (not has_tool_calls or all(name in allowed for name in names)),
+        }.get(branch, http_ok)
+        return {
+            "branch": branch,
+            "request_id": record.request_id,
+            "passed": bool(branch_ok),
+            "http_ok": http_ok,
+            "has_tool_calls": has_tool_calls,
+            "tool_call_names": names,
+            "http_status": record.status_code,
+            "e2e_ms": record.e2e_ms,
+            "error": record.error,
+        }
+
+    async def run(self) -> dict[str, Any]:
         if not self.settings.cases:
             raise ValueError("tool_calling requires at least one case")
         semaphore = asyncio.Semaphore(self.settings.concurrency)
-        return await asyncio.gather(
+        case_results = await asyncio.gather(
             *(self._run_case(case, semaphore) for case in self.settings.cases)
         )
+        branch_results = [await self._run_branch(branch) for branch in self.settings.branches]
+        return {"cases": case_results, "branches": branch_results}
 
-    def aggregate(self, raw_result: list[dict[str, Any]]) -> dict[str, Any]:
-        total = len(raw_result)
+    def aggregate(self, raw_result: dict[str, Any]) -> dict[str, Any]:
+        case_results = raw_result["cases"]
+        branch_results = raw_result["branches"]
+        total = len(case_results)
 
         def rate(key: str) -> float:
-            return sum(bool(result[key]) for result in raw_result) / total if total else 0.0
+            return sum(bool(result[key]) for result in case_results) / total if total else 0.0
 
+        branch_summary = {}
+        for branch in branch_results:
+            branch_summary[branch["branch"]] = {
+                "passed": branch["passed"],
+                "http_ok": branch["http_ok"],
+                "has_tool_calls": branch["has_tool_calls"],
+                "tool_call_names": branch["tool_call_names"],
+            }
+        branches_passed = sum(branch["passed"] for branch in branch_results)
+        branches_total = len(branch_results)
         return {
             "cases": total,
-            "passed": sum(result["passed"] for result in raw_result),
+            "passed": sum(result["passed"] for result in case_results),
             "success_rate": rate("passed"),
             "tool_selection_rate": rate("selection_ok"),
             "arguments_accuracy": rate("arguments_ok"),
             "json_valid_rate": rate("json_valid"),
             "schema_compliance_rate": rate("schema_compliant"),
-            "results": raw_result,
+            "branches": branch_summary,
+            "branches_passed": branches_passed,
+            "branches_total": branches_total,
+            "branch_results": branch_results,
+            "results": case_results,
         }
