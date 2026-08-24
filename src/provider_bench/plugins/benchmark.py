@@ -172,7 +172,7 @@ class LoadBenchmarkPlugin(BenchmarkPlugin[BenchmarkSettings]):
     def _histogram(values: list[float]) -> dict[str, Any]:
         samples = [value for value in values if value is not None]
         if not samples:
-            return {"bins": [], "counts": []}
+            return {"bins": [], "counts": [], "p50": None, "p90": None, "p95": None, "p99": None}
         low, high = min(samples), max(samples)
         if low == high:
             high = low + 1
@@ -183,7 +183,14 @@ class LoadBenchmarkPlugin(BenchmarkPlugin[BenchmarkSettings]):
         for value in samples:
             index = min(int((value - low) / width), bin_count - 1)
             counts[index] += 1
-        return {"bins": bins, "counts": counts}
+        return {
+            "bins": bins,
+            "counts": counts,
+            "p50": percentile(samples, 0.50),
+            "p90": percentile(samples, 0.90),
+            "p95": percentile(samples, 0.95),
+            "p99": percentile(samples, 0.99),
+        }
 
     def aggregate(self, raw_result: dict[str, Any]) -> dict[str, Any]:
         results: list[dict[str, Any]] = raw_result["results"]

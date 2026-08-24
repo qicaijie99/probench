@@ -1011,8 +1011,9 @@ window.__BENCH_CHARTS = {{ charts_json|safe }};
     var hist = provider.ttft_hist || {};
     function mount(id, opt) { var el = document.getElementById(id); if (!el) return; var c = echarts.init(el); c.setOption(opt); }
     function markP() {
+      var pcts = (provider.percentiles || []).filter(function (x) { return x.metric === 'ttft'; })[0] || hist || {};
       return [['p50','#067d3c'],['p90','#b54708'],['p95','#b42318']].map(function (x) {
-        return { xAxis: hist[x[0]], name: x[0], label: { formatter: x[0] }, lineStyle: { color: x[1], type: 'dashed' } };
+        return { xAxis: pcts[x[0]], name: x[0], label: { formatter: x[0] }, lineStyle: { color: x[1], type: 'dashed' } };
       });
     }
     mount('c-ttft-' + idx, {
