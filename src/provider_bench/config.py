@@ -69,7 +69,7 @@ benchmarks:
     warmup: 1
     repetitions: 5
     prompt: "用两句话解释什么是 API。"
-    max_tokens: 128
+    max_tokens: 512  # reasoning 模型需足够输出预算，避免思考占满导致 content 为空
   concurrency:
     enabled: false
     levels: [1, 2, 4, 8, 16, 32, 64, 128]
@@ -102,9 +102,16 @@ benchmarks:
     turns: 3
     init_tokens: 32000
     output_tokens: 346
+    max_inflight: 1
     arrival_start: 0.08
     arrival_end: 0.2
     ramp_seconds: 15.0
+    baseline_rps_min: 0.6
+    baseline_ttft_p50_max_ms: 15000
+    baseline_tpot_p50_max_ms: 35
+    baseline_cache_hit_rate_min: 0.6
+    scenario_input_tokens_min: 4000
+    scenario_input_tokens_max: 80000
   model_identity:
     enabled: false
     repetitions: 2
@@ -112,6 +119,7 @@ benchmarks:
     enabled: false
     tokenizer_encoding: cl100k_base
     allowed_deviation: 0.05
+    max_tokens: 512
 
 scoring:
   latency_ttft_good_ms: 1000

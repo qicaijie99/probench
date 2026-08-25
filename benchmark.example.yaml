@@ -21,7 +21,7 @@ benchmarks:
     warmup: 1
     repetitions: 10
     prompt: "用三点说明一个可靠 API 应具备哪些特征。"
-    max_tokens: 128
+    max_tokens: 512
   concurrency:
     enabled: false
     levels: [1, 2, 4, 8, 16, 32, 64, 128]
@@ -50,6 +50,7 @@ benchmarks:
   protocol:
     enabled: false
     checks: [ping, stream_integrity, usage_stream, image_base64, video_base64]
+    max_tokens: 512
   cache:
     enabled: false
     prefix_chars: 4096
@@ -65,6 +66,12 @@ benchmarks:
     arrival_start: 0.08
     arrival_end: 0.2
     ramp_seconds: 15.0
+    baseline_rps_min: 0.6
+    baseline_ttft_p50_max_ms: 15000
+    baseline_tpot_p50_max_ms: 35
+    baseline_cache_hit_rate_min: 0.6
+    scenario_input_tokens_min: 4000
+    scenario_input_tokens_max: 80000
   model_identity:
     enabled: false
     repetitions: 2
@@ -73,6 +80,7 @@ benchmarks:
     enabled: false
     tokenizer_encoding: cl100k_base
     allowed_deviation: 0.05
+    max_tokens: 512
     provider_prices:
       official: {input_per_million: 0, output_per_million: 0}
       candidate: {input_per_million: 0, output_per_million: 0}

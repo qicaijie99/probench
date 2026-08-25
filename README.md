@@ -7,6 +7,7 @@ Provider Bench 是一个面向任意 OpenAI-compatible API 的异步 Benchmark �
 ## 文档导航
 
 - [快速开始](#快速开始)
+- [完整验收流程（等价 Skill）](#完整验收流程等价-skill)
 - [Provider 配置](#provider-配置)
 - [Benchmark 插件](#benchmark-插件)
 - [CLI 使用指南](#cli-使用指南)
@@ -21,15 +22,17 @@ Provider Bench 是一个面向任意 OpenAI-compatible API 的异步 Benchmark �
 - 单 Provider 测试或多 Provider 横向对比，支持指定基线 Provider
 - OpenAI-compatible `/models` 与 `/chat/completions` 接口
 - Compatibility、Protocol、Features、Cache、Latency、Concurrency、Burst、Benchmark、Quality、Tool Calling、Structured Output、Model Identity、Billing 十三个插件
-- TTFT、TPOT、ITL、E2E、Output TPS 及 P50/P90/P95/P99
-- Success Rate、429、5xx、Timeout、最大稳定并发和突发批次统计
+- TTFT、TTFB、TPOT、ITL、E2E、Output TPS 及 P50/P75/P90/P95/P99
+- Success Rate、429、5xx、Timeout、SSL 错误、最大稳定并发和突发批次统计
 - 内置数学、推理、中文知识、代码、指令遵循和 JSON 数据集
 - Exact Match、Numeric、JSON Schema、Code Test、LLM Judge 五类评估器
 - `tiktoken` 本地 Token 计数、Provider usage 偏差与成本估算
-- Hard Gate、加权 Scorecard 和 PASS/WARN/FAIL 验收结论
+- 网关合规 / 模型能力 / 性能 三维度评分，Hard Gate 和 PASS/WARN/FAIL 验收结论
+- 阶梯/突发并发探针（含最大稳定并发量）、前缀缓存命中率、会话/轮次压测
 - 原始请求 JSONL、插件指标、运行状态、跨 Provider 对比和错误分析
 - Typer CLI、FastAPI API、SSE 实时进度、React + ECharts Web 控制台
 - API Key、自定义 Header 和持久化配置全程脱敏
+- 内置模型评测 Skill（`skills/model-benchmark`），可由 Claude Code / Codex 驱动全流程
 
 ## 环境要求
 
@@ -128,7 +131,7 @@ benchmarks:
     warmup: 1
     repetitions: 5
     prompt: "用两句话解释什么是 API。"
-    max_tokens: 128
+    max_tokens: 512  # reasoning 模型需足够输出预算
 
 output_dir: outputs
 ```
@@ -203,6 +206,106 @@ provider-bench web
 ```
 
 然后访问 <http://127.0.0.1:8000>。
+
+## 完整验收流程（等价 Skill）
+
+以下手动流程与内置 Skill [`skills/model-benchmark/SKILL.md`](skills/model-benchmark/SKILL.md) 完全等价：当使用 Claude Code / Codex 等 agent 时，直接让它加载该 Skill 即可代劳全流程；手动操作时按本节的步骤执行。
+
+### 1. 收集目标 API 信息
+
+需要三要素，其余可后补：
+
+- `base_url`：OpenAI-compatible 根路径，通常以 `/v1` 结尾
+- `api_key`：放环境变量，不要写进 YAML 或版本控制
+- `model`：被测模型名
+
+双 Provider 对比时，另需第二个 Provider 的同款信息。
+
+### 2. 写全量配置
+
+用 `provider-bench init benchmark.yaml` 生成后，改写成完整套件（覆盖功能测试 + 性能压测 + 对比）：
+
+```yaml
+provider:
+  name: candidate
+  base_url: ${API_BASE_URL}
+  api_key: ${API_KEY}
+  model: ${API_MODEL}
+
+benchmarks:
+  compatibility: { enabled: true }
+  protocol:
+    enabled: true
+    checks: [ping, stream_integrity, usage_stream, image_base64, video_base64]
+    max_tokens: 512
+  features:
+    enabled: true
+    reasoning_effort_levels: [low, high, max]
+    expect_reasoning_by_default: true
+  cache:
+    enabled: true
+    prefix_chars: 4096
+    rounds: 2
+    warmup: true
+  tool_calling:
+    enabled: true
+    branches: [default, auto, required, none, function, allowed_tools]
+  structured_output: { enabled: true, strict: true }
+  model_identity: { enabled: true, repetitions: 2 }
+  billing: { enabled: true, max_tokens: 512 }
+  quality: { enabled: true }
+  latency: { enabled: true, warmup: 1, repetitions: 10, max_tokens: 512 }
+  benchmark:
+    enabled: true
+    sessions: 4
+    turns: 3
+    init_tokens: 32000
+    output_tokens: 346
+    max_inflight: 1
+    arrival_start: 0.08
+    arrival_end: 0.2
+    ramp_seconds: 15.0
+    baseline_rps_min: 0.6
+    baseline_ttft_p50_max_ms: 15000
+    baseline_tpot_p50_max_ms: 35
+    baseline_cache_hit_rate_min: 0.6
+    scenario_input_tokens_min: 4000
+    scenario_input_tokens_max: 80000
+  concurrency:
+    enabled: true
+    levels: [1, 2, 4, 8, 16, 32, 64, 128]
+    requests_per_level: 8
+    stable_success_rate: 0.995
+  burst: { enabled: false }
+
+output_dir: outputs
+```
+
+> 对 reasoning 模型（如 K3），`latency` / `protocol` / `billing` 的 `max_tokens` 要给足（示例统一为 512），否则思考 token 会挤占输出预算，导致 `content` 为空、TTFT/多模态/工具参数被误判失败。非 reasoning 模型可用更小值。
+
+### 3. 校验并运行
+
+```bash
+export API_BASE_URL='https://...'
+export API_KEY='...'
+export API_MODEL='...'
+provider-bench validate benchmark.yaml   # 应打印 Valid: 1 provider(s), 12 enabled plugin(s)
+provider-bench run benchmark.yaml        # 结束打印 Report: outputs/<run-id>/report.html
+```
+
+### 4. 验证报告
+
+用浏览器打开 `report.html`，确认每个 Provider 都包含：总体结论、评分子项、功能用例表、缓存命中率（含每轮 Token 构成柱状图）、返回模型汇总、延迟分位数（TTFB/TTFT/TPOT/ITL/E2E）+ 流式用例明细、`BENCHMARK RESULTS`、基线对照、分会话明细、8 张 ECharts 图表、并发探针、失败详情、Provider 对比（双 Provider 时）。
+
+### 5. 按维度解读
+
+总体结论卡给出三维度分数，用于区分「第三方网关/转发层」和「模型本身」：
+
+- **网关合规 (gateway)**：协议兼容、参数拒绝、`tool_choice` 语义、多模态格式、模型路由一致性、缓存、usage 计费。分数低指向网关部署（如「网关不校验参数」「网关不遵守 `tool_choice=none`」「跨请求前缀缓存不稳定」），不应算作模型能力失败。
+- **模型能力 (model)**：质量、结构化输出、工具调用正确性、思考/推理。分数低指向模型。
+- **性能 (performance)**：延迟、吞吐、并发、可靠性、成本。
+
+报告失败详情里每个 FAIL 用例附原因 + 请求/响应证据，便于回溯归因。
 
 ## Provider 配置
 
@@ -287,7 +390,7 @@ provider:
 | `latency` | 统计 TTFT、TPOT、ITL、E2E 和输出 TPS 分布 | `warmup`、`repetitions`、`prompt`、`max_tokens` | 低到中 |
 | `concurrency` | 阶梯并发和最大稳定并发 | `levels`、`requests_per_level`、稳定性阈值 | 高，可能触发 429 |
 | `burst` | 同时发起不同规模的突发批次 | `sizes`、`max_tokens` | 高，可能触发限流和费用 |
-| `benchmark` | 会话/轮次 + 到达率压测：TTFB、输入/输出 token 吞吐、分轮次缓存、RPS/TPM | `sessions`、`turns`、`init_tokens`、`arrival_*`、`ramp_seconds` | 高，可能触发限流和费用 |
+| `benchmark` | 会话/轮次 + 到达率压测：TTFB、输入/输出 token 吞吐、分轮次缓存、稳态缓存（turn≥2）、RPS/TPM、基线对照（场景合规/参考基线）、分会话明细 | `sessions`、`turns`、`init_tokens`、`arrival_*`、`ramp_seconds`、`baseline_*` | 高，可能触发限流和费用 |
 | `quality` | 使用内置或自定义数据集评估模型质量 | `datasets`、`categories`、`evaluators`、`max_cases`、`concurrency` | 取决于用例数；LLM Judge 会增加请求 |
 | `tool_calling` | 检查工具选择、参数 JSON、Schema 合规，以及 tool_choice 全分支 | `cases`、`branches`、`concurrency`、`max_tokens` | 中 |
 | `structured_output` | 检查 JSON Object、JSON Schema 和嵌套结构 | `cases`、`strict`、`concurrency` | 中 |
@@ -299,6 +402,8 @@ provider:
 - Concurrency 在每个 level 发起 `max(level, requests_per_level)` 个请求。
 - Burst 的请求总数是所有 `sizes` 之和。
 - 多 Provider 运行会为每个 Provider 重复全部请求。
+
+> 对 reasoning 模型（如 K3），涉及模型「可见输出」的插件（`latency`、`protocol`、`billing`、`tool_calling`、`model_identity`）需要足够的 `max_tokens`（建议 512），否则思考 token 会耗尽输出预算，导致 `content` 为空、流式 TTFT 记为 None、工具参数被截断、身份探针一致性下降等**误判**。
 
 首次压测建议从小规模开始：
 
@@ -493,7 +598,7 @@ Token 估算依赖所选模型或 `tokenizer_encoding`。不同 Provider 的服�
 
 ## 评分、Hard Gate 与验收结论
 
-平台只对本次有可用指标的评分组件应用权重，并在这些组件之间自动归一化。常用组件包括 Quality、Latency、Throughput、Concurrency、Reliability、Compatibility、Tool Calling、Features、Cache、Billing 和 Cost。
+平台只对本次有可用指标的评分组件应用权重，并在这些组件之间自动归一化。组件被划分为三个维度：**网关合规 (gateway)**（compatibility、protocol、features_param、tool_choice、cache、model_identity、billing）、**模型能力 (model)**（quality、structured_output、tool_calling、features_thinking）和**性能 (performance)**（latency、throughput、concurrency、reliability、cost）。总体结论卡会同时展示三维度分，便于区分网关层与模型层问题。
 
 ```yaml
 scoring:
@@ -503,10 +608,15 @@ scoring:
     throughput: 10
     concurrency: 15
     reliability: 10
-    compatibility: 8
-    tool_calling: 5
-    features: 5
+    compatibility: 4
+    protocol: 4
+    structured_output: 4
+    tool_calling: 3
+    tool_choice: 2
+    features_thinking: 3
+    features_param: 2
     cache: 5
+    model_identity: 3
     billing: 4
     cost: 3
   latency_ttft_good_ms: 1000
