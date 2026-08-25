@@ -68,6 +68,7 @@ class FeaturesSettings(PluginSettings):
     param_cases: list[ParamCase] = Field(default_factory=_default_param_cases)
     param_prompt: str = "Reply with exactly: ok"
     max_tokens: int = Field(default=64, gt=0)
+    check_thinking_toggle: bool = True
 
     @model_validator(mode="after")
     def validate_levels(self) -> FeaturesSettings:
@@ -185,6 +186,60 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
             )
         return results
 
+    @staticmethod
+    def _has_reasoning(record: RequestRecord) -> bool:
+        return bool(record.response.get("reasoning_content")) or bool(
+            record.usage.reasoning_tokens if record.usage else None
+        )
+
+    async def _thinking_toggle(self) -> dict[str, Any] | None:
+        if not self.settings.check_thinking_toggle:
+            return None
+        budget = max(self.settings.max_tokens, 256)
+        on = await self.context.provider.chat(
+            case_id="features.thinking_toggle_on",
+            messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
+            stream=False,
+            max_tokens=budget,
+            temperature=0,
+            extra={"enable_thinking": True},
+        )
+        await self.context.record(on)
+        off = await self.context.provider.chat(
+            case_id="features.thinking_toggle_off",
+            messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
+            stream=False,
+            max_tokens=budget,
+            temperature=0,
+            extra={"enable_thinking": False},
+        )
+        await self.context.record(off)
+        on_has = self._has_reasoning(on)
+        off_has = self._has_reasoning(off)
+        if on_has and not off_has:
+            note = "思考开关有效：enable_thinking=true 产生推理，false 关闭推理"
+        elif on_has and off_has:
+            note = "enable_thinking=false 仍产生推理 token，网关无法真正关闭思考"
+        elif not on_has and off_has:
+            note = "异常：enable_thinking=false 反而产生推理 token"
+        else:
+            note = "模型未产生任何推理 token"
+        return {
+            "request_id_on": on.request_id,
+            "request_id_off": off.request_id,
+            "on_reasoning_tokens": on.usage.reasoning_tokens if on.usage else None,
+            "off_reasoning_tokens": off.usage.reasoning_tokens if off.usage else None,
+            "on_has_reasoning": on_has,
+            "off_has_reasoning": off_has,
+            "toggle_works": on_has and not off_has,
+            "passed": on_has and not off_has,
+            "warn": off_has,
+            "http_status": off.status_code,
+            "e2e_ms": off.e2e_ms,
+            "note": note,
+            "error": off.error or on.error,
+        }
+
     async def _param_constraints(self) -> list[dict[str, Any]]:
         results = []
         for case in self.settings.param_cases:
@@ -201,13 +256,15 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
                 omit_temperature=omit_temperature,
             )
             await self.context.record(record)
+            warn = False
             if case.expect == "reject":
-                passed = record.status != "success"
-                note = (
-                    "参数被拒绝"
-                    if passed
-                    else f"应拒绝但请求成功 · {case.param}={case.value}"
-                )
+                if record.status != "success":
+                    passed = True
+                    note = "参数被拒绝"
+                else:
+                    passed = False
+                    warn = True
+                    note = f"网关未拒绝越界参数（宽松）· {case.param}={case.value}"
             else:
                 passed = record.status == "success"
                 note = "参数被接受" if passed else f"应接受但请求失败 · {case.param}={case.value}"
@@ -219,6 +276,7 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
                     "value": case.value,
                     "expect": case.expect,
                     "passed": passed,
+                    "warn": warn,
                     "http_status": record.status_code,
                     "e2e_ms": record.e2e_ms,
                     "note": note,
@@ -231,6 +289,7 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
         return {
             "reasoning_effort": await self._reasoning_effort(),
             "thinking": await self._thinking(),
+            "thinking_toggle": await self._thinking_toggle(),
             "param_constraints": await self._param_constraints(),
         }
 
@@ -244,9 +303,25 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
             "success_rate": passed / total if total else 0.0,
         }
 
+    @staticmethod
+    def _param_summary(results: list[dict[str, Any]]) -> dict[str, Any]:
+        total = len(results)
+        warned = sum(bool(item.get("warn")) for item in results)
+        passed = sum(bool(item["passed"]) and not item.get("warn") for item in results)
+        failed = sum(not item["passed"] and not item.get("warn") for item in results)
+        effective = total - warned
+        return {
+            "total": total,
+            "passed": passed,
+            "failed": failed,
+            "warned": warned,
+            "success_rate": passed / effective if effective else 1.0,
+        }
+
     def aggregate(self, raw_result: dict[str, Any]) -> dict[str, Any]:
         reasoning = raw_result["reasoning_effort"]
         thinking = raw_result["thinking"]
+        toggle = raw_result.get("thinking_toggle")
         params = raw_result["param_constraints"]
         reasoning_tokens = [item["reasoning_tokens"] for item in reasoning if item["reasoning_tokens"]]
         distinguishable = (
@@ -260,6 +335,7 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
             "reasoning_effort_distinguishable": distinguishable,
             "thinking": self._summary(thinking),
             "thinking_results": thinking,
-            "param_constraints": self._summary(params),
+            "thinking_toggle": toggle,
+            "param_constraints": self._param_summary(params),
             "param_constraint_results": params,
         }

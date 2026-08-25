@@ -190,6 +190,8 @@ class OpenAICompatibleProvider(Provider):
         started_wall = datetime.now(UTC)
         started = time.perf_counter()
         first_token: float | None = None
+        first_reasoning_token: float | None = None
+        first_content_token: float | None = None
         first_byte: float | None = None
         chunk_count = 0
         saw_done = False
@@ -239,6 +241,10 @@ class OpenAICompatibleProvider(Provider):
                         delta = choice.get("delta") or {}
                         chunk = delta.get("content")
                         reasoning_chunk = delta.get("reasoning_content")
+                        if reasoning_chunk and first_reasoning_token is None:
+                            first_reasoning_token = time.perf_counter()
+                        if chunk and first_content_token is None:
+                            first_content_token = time.perf_counter()
                         if (chunk or reasoning_chunk) and first_token is None:
                             first_token = time.perf_counter()
                         if chunk:
@@ -292,6 +298,8 @@ class OpenAICompatibleProvider(Provider):
         estimated_tokens = completion_tokens or local_tokens or len(token_events) or None
         ttfb = (first_byte - started) * 1000 if first_byte is not None else None
         ttft = (first_token - started) * 1000 if first_token is not None else None
+        ttfr = (first_reasoning_token - started) * 1000 if first_reasoning_token is not None else None
+        ttfc = (first_content_token - started) * 1000 if first_content_token is not None else None
         generation_seconds = ended - first_token if first_token is not None else None
         tpot = None
         if generation_seconds is not None and estimated_tokens and estimated_tokens > 1:
@@ -314,6 +322,8 @@ class OpenAICompatibleProvider(Provider):
             end_time=_utc_from_monotonic(started_wall, started, ended),
             ttfb_ms=ttfb,
             ttft_ms=ttft,
+            ttfr_ms=ttfr,
+            ttfc_ms=ttfc,
             tpot_ms=tpot,
             itl_ms=itl,
             e2e_ms=(ended - started) * 1000,

@@ -33,7 +33,7 @@ provider:
 # reference_provider to one name.
 
 benchmarks:
-  compatibility: { enabled: true }
+  compatibility: { enabled: true, max_tokens: 512 }
   protocol:
     enabled: true
     checks: [ping, stream_integrity, usage_stream, image_base64, video_base64]
@@ -45,7 +45,7 @@ benchmarks:
   cache:
     enabled: true
     prefix_chars: 4096
-    rounds: 2
+    rounds: 4
     warmup: true
   tool_calling:
     enabled: true
@@ -53,8 +53,17 @@ benchmarks:
   structured_output: { enabled: true, strict: true }
   model_identity: { enabled: true, repetitions: 2 }
   billing: { enabled: true, max_tokens: 512 }
-  quality: { enabled: true }
-  latency: { enabled: true, warmup: 1, repetitions: 10, max_tokens: 512 }
+  quality: { enabled: true, max_tokens: 512 }
+  latency:
+    enabled: true
+    warmup: 1
+    repetitions: 10
+    max_tokens: 512
+    # 思考模式延迟：测量 TTFR（首个推理 token）/ TTFC（首个正文 token）/ 思考开销（TTFC−TTFR）
+    # thinking: true
+    # thinking_prompt: "逐步推理并解答：某工厂生产两种零件，A 每个重 3 克、B 每个重 5 克。现有 41 个零件总重 167 克，请问 A 零件有几个？"
+    # extra:
+    #   reasoning_effort: high
   benchmark:
     enabled: true
     sessions: 4
@@ -82,6 +91,10 @@ benchmarks:
 
 If the target is a reasoning model (e.g. K3) whose sampling params are **fixed** (only one accepted value), set the `features.param_cases` list to the model's accepted values as `expect: accept` and everything else as `expect: reject`. When in doubt, ask the user for the model's official parameter policy before running.
 
+**宽松网关 → WARN（不计失败）**：`features` 的参数约束里，`expect: reject` 的越界采样参数（如 `temperature=1.1`、`top_p=0.8` 等）若被网关以 200 接受，说明网关**不校验采样参数范围**，这类结果在报告里显示为 `WARN`（宽松网关），**不计入 FAIL 错误用例、也不拉低 `features_param` 得分**。真正算失败的只有 `expect: accept` 却请求失败的情况。
+
+**思考开关测试**：`features` 会额外对比 `enable_thinking=true` 与 `enable_thinking=false` 两档，判断网关能否真正关闭思考。若 `false` 仍产生推理 token，报告显示 `WARN`（网关无法关闭思考），也不计失败。可用 `features.check_thinking_toggle: false` 关闭该测试。
+
 Completion criterion: `provider-bench validate benchmark.yaml` prints `Valid:` with no error.
 
 ### 3. Run and inspect
@@ -94,7 +107,7 @@ Open `report.html` and confirm it contains, per provider:
 
 - 总体结论 (scorecard + verdict + sub-item counts + TTFT/E2E p50)
 - 评分子项 (weighted sub-items: http_ok, ping_ok, model_match, usage_present, cache_hit, stream_integrity, usage_stream, image_base64, video_base64, tool_choice, structured_output, reasoning_effort, thinking_switch)
-- 功能用例 tables (协议 / 工具调用 / 结构化输出 / 思考参数 / 参数约束)，其中协议含 Usage 非流式 + Usage 流式，参数约束含 `param_omit_sampling` / `param_fixed_*` / `param_reject_*`
+- 功能用例 tables (协议 / 工具调用 / 结构化输出 / 思考参数 / 参数约束)，其中协议含 Usage 非流式 + Usage 流式，参数约束含 `param_omit_sampling` / `param_fixed_*` / `param_reject_*`（越界参数被接受的宽松网关显示 WARN 而非 FAIL），思考/参数含「思考开关 · enable_thinking 开/关对比」
 - 缓存命中率 section (rounds table + 每轮 Token 构成 bar chart)
 - 返回模型汇总 (model consistency)
 - 延迟 percentiles (TTFB/TTFT/TPOT/ITL/E2E) + 流式用例 TTFT 明细
@@ -115,7 +128,9 @@ The 总体结论 card reports three dimension scores, separating **第三方网�
 
 When reporting to the user, attribute gateway-dimension failures to the gateway (e.g. "网关不校验参数 / 网关不支持该多模态格式 / 网关不遵守 tool_choice=none") and model-dimension failures to the model — do not collapse them into one "model failed" verdict.
 
-For reasoning models, latency/billing use `max_tokens: 512` (otherwise the model spends its whole budget thinking and returns empty `content`).
+For reasoning models, latency/billing use `max_tokens: 512` (otherwise the model spends its whole budget thinking and returns empty `content`). `compatibility` 与 `quality` 也默认用 `max_tokens: 512`（`quality.max_tokens` 是各用例 token 预算的下限），避免思考型模型把预算耗在推理上导致功能探针空内容误报。
+
+**思考模式延迟**：当目标是思考型模型（如 K3 启用了 thinking），在 `latency` 块中开启 `thinking: true` 即可让每条流式请求带上 `enable_thinking: true`，并在报告延迟表中新增 TTFR（首个推理 token）/ TTFC（首个正文 token）/ 思考开销三行。务必同时提供会真正触发思考的多步推理 `thinking_prompt`（默认内置了一道多步数学题），否则 trivially 简单提示词测不出有意义的思考耗时。
 
 ## Reference
 
@@ -125,13 +140,13 @@ Plugin → reference-report mapping:
 | --- | --- |
 | `compatibility` | http_ok, usage 回传, tool_calling, json_output, multi-turn |
 | `protocol` | ping, stream_integrity (SSE chunks + `[DONE]`), usage_stream (include_usage), image/video base64 |
-| `features` | reasoning_effort low/high/max, thinking 开关 (enable_thinking / thinking.type / chat_template_kwargs), 参数约束 (fixed/reject) |
+| `features` | reasoning_effort low/high/max, thinking 开关 (enable_thinking / thinking.type / chat_template_kwargs), 思考开关开/关对比（能否真正关闭思考）, 参数约束 (fixed/reject，宽松网关计 WARN) |
 | `cache` | Prefix Cache 命中率：预热 1 轮 + 测量 N 轮，长文固定前缀 + 随机后缀 |
 | `tool_calling` | tool_choice 全分支：default/auto/required/none/function/allowed_tools |
 | `structured_output` | json_object + json_schema |
 | `model_identity` | 返回模型一致性、指纹、行为漂移 |
 | `billing` | usage 回传、token 偏差、成本 |
-| `latency` | TTFT / TPOT / ITL / E2E 分位数 (p50/p75/p90/p95/p99) |
+| `latency` | TTFT / TPOT / ITL / E2E 分位数 (p50/p75/p90/p95/p99)；`thinking: true` 时额外测 TTFR / TTFC / 思考开销 |
 | `benchmark` | 会话/轮次压测：sessions × turns、到达率、TTFB、输入/输出 token 吞吐、分轮次缓存、RPS/TPM、稳态缓存（turn≥2）、基线对照（场景合规/参考基线）、分会话明细 |
 | `concurrency` | 并发探针：阶梯并发（levels × requests_per_level）+ 最大稳定并发量（按 success_rate/TTFT p95 阈值） |
 | `burst` | 突发并发：同时发起不同规模批次（可选，按需开启） |

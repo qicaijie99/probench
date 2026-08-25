@@ -88,7 +88,12 @@ async def test_features_protocol_and_cache_plugins(tmp_path: Path) -> None:
         if item["param"] == "temperature" and item["value"] == 1.1
     )
     assert reject_result["passed"] is False
-    assert "应拒绝但请求成功" in reject_result["note"]
+    assert reject_result["warn"] is True
+    assert "网关未拒绝越界参数（宽松）" in reject_result["note"]
+    param_summary = features["param_constraints"]
+    assert param_summary["warned"] == 7
+    assert param_summary["passed"] == 6
+    assert param_summary["failed"] == 0
 
     protocol = plugins["protocol"].metrics
     assert protocol["checks"]["ping"]["passed"] is True
@@ -154,3 +159,96 @@ def test_ssl_errors_are_classified() -> None:
     response = httpx.Response(429, request=request)
     status_error = httpx.HTTPStatusError("rate limit", request=request, response=response)
     assert _error_kind(status_error) == ("rate_limited", 429)
+
+
+async def test_thinking_toggle_detects_switch(tmp_path: Path) -> None:
+    class TrackingProvider(FakeProvider):
+        def __init__(self) -> None:
+            super().__init__(name="fake", model="fake-model")
+            self.calls: list[dict[str, Any]] = []
+
+        async def chat(self, **kwargs):
+            self.calls.append(kwargs)
+            return await super().chat(**kwargs)
+
+    provider = TrackingProvider()
+    config = AppConfig.model_validate(
+        {
+            "provider": {
+                "name": "fake",
+                "base_url": "https://fake.test/v1",
+                "api_key": "secret",
+                "model": "fake-model",
+            },
+            "output_dir": str(tmp_path),
+            "benchmarks": {"features": {"enabled": True}},
+        }
+    )
+    result = await BenchmarkEngine(provider_factory=lambda _: provider).run(
+        config, run_id="thinking-toggle"
+    )
+    toggle = result.providers["fake"].plugins["features"].metrics["thinking_toggle"]
+    assert toggle["toggle_works"] is True
+    assert toggle["passed"] is True
+    assert toggle["warn"] is False
+    on_call = next(c for c in provider.calls if c["case_id"] == "features.thinking_toggle_on")
+    off_call = next(c for c in provider.calls if c["case_id"] == "features.thinking_toggle_off")
+    assert on_call["extra"] == {"enable_thinking": True}
+    assert off_call["extra"] == {"enable_thinking": False}
+
+
+async def test_thinking_toggle_warns_when_off_still_reasons(tmp_path: Path) -> None:
+    class AlwaysReasoningProvider(FakeProvider):
+        async def chat(self, **kwargs):
+            result = await super().chat(**kwargs)
+            result.response["reasoning_content"] = "thinking regardless of switch"
+            return result
+
+    config = AppConfig.model_validate(
+        {
+            "provider": {
+                "name": "fake",
+                "base_url": "https://fake.test/v1",
+                "api_key": "secret",
+                "model": "fake-model",
+            },
+            "output_dir": str(tmp_path),
+            "benchmarks": {"features": {"enabled": True}},
+        }
+    )
+    result = await BenchmarkEngine(
+        provider_factory=lambda item: AlwaysReasoningProvider(item.name, item.model)
+    ).run(config, run_id="thinking-toggle-warn")
+    toggle = result.providers["fake"].plugins["features"].metrics["thinking_toggle"]
+    assert toggle["passed"] is False
+    assert toggle["warn"] is True
+    assert "无法真正关闭思考" in toggle["note"]
+
+
+async def test_quality_max_tokens_floor(tmp_path: Path) -> None:
+    class TrackingProvider(FakeProvider):
+        def __init__(self) -> None:
+            super().__init__(name="fake", model="fake-model")
+            self.case_budgets: list[tuple[str, int]] = []
+
+        async def chat(self, **kwargs):
+            if "judge" not in kwargs["case_id"]:
+                self.case_budgets.append((kwargs["case_id"], kwargs["max_tokens"]))
+            return await super().chat(**kwargs)
+
+    provider = TrackingProvider()
+    config = AppConfig.model_validate(
+        {
+            "provider": {
+                "name": "fake",
+                "base_url": "https://fake.test/v1",
+                "api_key": "secret",
+                "model": "fake-model",
+            },
+            "output_dir": str(tmp_path),
+            "benchmarks": {"quality": {"enabled": True, "max_tokens": 512}},
+        }
+    )
+    await BenchmarkEngine(provider_factory=lambda _: provider).run(config, run_id="quality-floor")
+    assert provider.case_budgets
+    assert all(budget >= 512 for _, budget in provider.case_budgets)

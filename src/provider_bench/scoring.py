@@ -103,7 +103,11 @@ def _component_scores(
         params = features.metrics.get("param_constraints") or {}
         param_passed = int(params.get("passed", 0))
         param_total = int(params.get("total", 0))
-        scores["features_param"] = _bounded(param_passed / param_total * 100) if param_total else 0.0
+        param_warned = int(params.get("warned", 0))
+        param_effective = param_total - param_warned
+        scores["features_param"] = (
+            _bounded(param_passed / param_effective * 100) if param_effective else 0.0
+        )
 
     cache = plugins.get("cache")
     if cache and cache.status == RunStatus.COMPLETED:

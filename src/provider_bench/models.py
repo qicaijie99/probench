@@ -141,6 +141,8 @@ class RequestRecord(BaseModel):
     end_time: datetime
     ttfb_ms: float | None = None
     ttft_ms: float | None = None
+    ttfr_ms: float | None = None
+    ttfc_ms: float | None = None
     tpot_ms: float | None = None
     itl_ms: list[float] = Field(default_factory=list)
     e2e_ms: float

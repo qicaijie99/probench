@@ -15,13 +15,18 @@ reference_provider: official
 benchmarks:
   compatibility:
     enabled: true
-    max_tokens: 64
+    max_tokens: 512
   latency:
     enabled: true
     warmup: 1
     repetitions: 10
     prompt: "用三点说明一个可靠 API 应具备哪些特征。"
     max_tokens: 512
+    # 思考模式延迟：开启后测量 TTFR（首个推理 token）、TTFC（首个正文 token）、思考开销
+    # thinking: true
+    # thinking_prompt: "逐步推理并解答：某工厂生产两种零件，A 每个重 3 克、B 每个重 5 克。现有 41 个零件总重 167 克，请问 A 零件有几个？"
+    # extra:
+    #   reasoning_effort: high
   concurrency:
     enabled: false
     levels: [1, 2, 4, 8, 16, 32, 64, 128]
@@ -37,6 +42,7 @@ benchmarks:
     datasets: [builtin:core]
     categories: [math, reasoning, chinese_knowledge, code, instruction_following, json]
     concurrency: 4
+    max_tokens: 512
   tool_calling:
     enabled: false
     branches: [default, auto, required, none, function, allowed_tools]
@@ -54,7 +60,7 @@ benchmarks:
   cache:
     enabled: false
     prefix_chars: 4096
-    rounds: 2
+    rounds: 4
     warmup: true
   benchmark:
     enabled: false

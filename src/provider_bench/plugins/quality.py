@@ -21,6 +21,7 @@ class QualitySettings(PluginSettings):
     max_cases: int | None = Field(default=None, gt=0)
     concurrency: int = Field(default=4, gt=0, le=64)
     temperature: float = Field(default=0, ge=0, le=2)
+    max_tokens: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def validate_evaluators(self) -> QualitySettings:
@@ -75,7 +76,7 @@ class QualityPlugin(BenchmarkPlugin[QualitySettings]):
                 case_id=f"quality.{case.id}",
                 messages=messages,
                 stream=False,
-                max_tokens=case.max_tokens,
+                max_tokens=max(case.max_tokens, self.settings.max_tokens or 0),
                 temperature=self.settings.temperature,
                 response_format=response_format,
             )

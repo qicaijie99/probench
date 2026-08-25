@@ -13,6 +13,9 @@ def record(
     *,
     content: str = "OK",
     tool_calls: list[dict[str, Any]] | None = None,
+    ttfr_ms: float | None = None,
+    ttfc_ms: float | None = None,
+    reasoning_content: str | None = None,
 ) -> RequestRecord:
     started = datetime.now(UTC)
     return RequestRecord(
@@ -23,6 +26,8 @@ def record(
         first_token_time=started + timedelta(milliseconds=10),
         end_time=started + timedelta(milliseconds=30),
         ttft_ms=10,
+        ttfr_ms=ttfr_ms,
+        ttfc_ms=ttfc_ms,
         tpot_ms=2,
         itl_ms=[2, 2],
         e2e_ms=30,
@@ -34,6 +39,7 @@ def record(
         request={"body": {"model": "fake-model"}},
         response={
             "content": content,
+            "reasoning_content": reasoning_content or "",
             "finish_reason": "stop",
             "tool_calls": tool_calls or [],
             "model": "fake-model",
@@ -122,6 +128,10 @@ class FakeProvider(Provider):
             content = "pong"
         result = record(self.name, case_id, content=content, tool_calls=tool_calls)
         result.response["model"] = self.model
+        if extra and extra.get("enable_thinking"):
+            result.ttfr_ms = 20
+            result.ttfc_ms = 60
+            result.response["reasoning_content"] = "Let me reason step by step."
         return result
 
     async def close(self) -> None:

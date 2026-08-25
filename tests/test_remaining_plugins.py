@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from typing import Any
 
 from provider_bench.engine import BenchmarkEngine
 from provider_bench.models import AppConfig, RunStatus
@@ -88,6 +89,62 @@ async def test_quality_tool_structured_identity_and_billing_plugins(tmp_path: Pa
     assert plugins["model_identity"].metrics["behavior_consistency"] == 1
     assert plugins["billing"].metrics["usage_present_rate"] == 1
     assert (tmp_path / "remaining-plugins/benchmarks/quality/requests.jsonl").is_file()
+
+
+async def test_latency_thinking_mode_measures_ttfr_ttfc_and_overhead(tmp_path: Path) -> None:
+    class TrackingProvider(FakeProvider):
+        def __init__(self) -> None:
+            super().__init__(name="fake", model="fake-model")
+            self.calls: list[dict[str, Any]] = []
+
+        async def chat(self, **kwargs):
+            self.calls.append(kwargs)
+            return await super().chat(**kwargs)
+
+    provider = TrackingProvider()
+    config = AppConfig.model_validate(
+        {
+            "provider": {
+                "name": "fake",
+                "base_url": "https://fake.test/v1",
+                "api_key": "secret",
+                "model": "fake-model",
+            },
+            "output_dir": str(tmp_path),
+            "benchmarks": {
+                "latency": {
+                    "enabled": True,
+                    "warmup": 0,
+                    "repetitions": 3,
+                    "thinking": True,
+                    "thinking_prompt": "逐步推理：3x+5y=41 且 x+y=11，求 x。",
+                    "extra": {"reasoning_effort": "high"},
+                },
+            },
+        }
+    )
+    result = await BenchmarkEngine(provider_factory=lambda _: provider).run(
+        config, run_id="latency-thinking"
+    )
+    metrics = result.providers["fake"].plugins["latency"].metrics
+
+    measure_call = next(
+        call for call in provider.calls if call["case_id"] == "latency.measure.1"
+    )
+    assert measure_call["extra"] == {
+        "enable_thinking": True,
+        "reasoning_effort": "high",
+    }
+    assert measure_call["messages"][-1]["content"] == "逐步推理：3x+5y=41 且 x+y=11，求 x。"
+
+    assert metrics["ttfr_ms"]["p50"] == 20
+    assert metrics["ttfc_ms"]["p50"] == 60
+    assert metrics["thinking_overhead_ms"]["p50"] == 40
+    assert metrics["details"][0]["ttfr_ms"] == 20
+    assert metrics["details"][0]["ttfc_ms"] == 60
+    report = (tmp_path / "latency-thinking/report.html").read_text(encoding="utf-8")
+    assert "TTFR（首个推理 token）" in report
+    assert "TTFC（首个正文 token）" in report
 
 
 async def test_multi_provider_run_generates_metric_and_identity_comparison(

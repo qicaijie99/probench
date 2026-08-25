@@ -24,7 +24,7 @@ class CompatibilitySettings(PluginSettings):
             "json_output",
         ]
     )
-    max_tokens: int = Field(default=64, gt=0)
+    max_tokens: int = Field(default=512, gt=0)
 
 
 @register_plugin

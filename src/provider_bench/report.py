@@ -278,6 +278,7 @@ def _build_functional_cases(plugins: dict[str, Any]) -> list[dict[str, Any]]:
                 "suite": suite,
                 "level": level,
                 "passed": passed,
+                "warn": extra.get("warn", False),
                 "http": extra.get("http"),
                 "e2e_ms": extra.get("e2e_ms"),
                 "ttfb_ms": extra.get("ttfb_ms"),
@@ -387,13 +388,30 @@ def _build_functional_cases(plugins: dict[str, Any]) -> list[dict[str, Any]]:
                     check="思考行为",
                     request_id=result.get("request_id"),
                 )
+            toggle = metrics.get("thinking_toggle")
+            if toggle:
+                push(
+                    "must.thinking_toggle",
+                    "思考开关 · enable_thinking 开/关对比",
+                    "思考/参数",
+                    "must",
+                    None if toggle.get("warn") else toggle.get("passed"),
+                    warn=toggle.get("warn"),
+                    http=toggle.get("http_status"),
+                    e2e_ms=toggle.get("e2e_ms"),
+                    note=toggle.get("note", ""),
+                    check="思考开关",
+                    request_id=toggle.get("request_id_off") or toggle.get("request_id_on"),
+                )
             for result in metrics.get("param_constraint_results", []):
+                warn = result.get("warn", False)
                 push(
                     f"must.param_{result['case_id']}",
                     f"参数约束 · {result['param']}={result['value']}",
                     "参数约束",
                     "must",
-                    result["passed"],
+                    None if warn else result["passed"],
+                    warn=warn,
                     http=result.get("http_status"),
                     e2e_ms=result.get("e2e_ms"),
                     note=result.get("note", ""),
@@ -487,12 +505,17 @@ def _build_latency_view(plugins: dict[str, Any]) -> dict[str, Any] | None:
     if plugin is None or plugin.status.value != "COMPLETED":
         return None
     metrics = plugin.metrics
+    thinking = "ttfr_ms" in metrics
     return {
         "ttfb": metrics.get("ttfb_ms"),
         "ttft": metrics.get("ttft_ms"),
+        "ttfr": metrics.get("ttfr_ms") if thinking else None,
+        "ttfc": metrics.get("ttfc_ms") if thinking else None,
+        "overhead": metrics.get("thinking_overhead_ms") if thinking else None,
         "tpot": metrics.get("tpot_ms"),
         "itl": metrics.get("itl_ms"),
         "e2e": metrics.get("e2e_ms"),
+        "thinking": thinking,
         "success_rate": metrics.get("success_rate"),
         "details": metrics.get("details", []),
     }
@@ -616,7 +639,7 @@ h1{margin:0 0 8px}.meta{color:#555;line-height:1.6}
 .card{background:#fff;border:1px solid #e6e1da;border-radius:12px;padding:16px;margin:12px 0}
 table{width:100%;border-collapse:collapse;font-size:14px}
 th,td{border-bottom:1px solid #eee;padding:8px;text-align:left;vertical-align:top}
-th{background:#faf8f5}.ok{color:#067d3c}.bad{color:#b42318}.err{color:#b42318}
+th{background:#faf8f5}.ok{color:#067d3c}.bad{color:#b42318}.err{color:#b42318}.warn-text{color:#b54708;font-weight:700}
 code{font-size:12px}
 .fail-box{background:#fff8f7;border:1px solid #f0d0cb;border-radius:10px;padding:12px;margin:12px 0}
 .fail-case{border-top:1px solid #f0d0cb;padding-top:10px;margin-top:10px}
@@ -731,7 +754,7 @@ pre.mtb{background:#1b1b1b;color:#f5f5f5;padding:14px;border-radius:8px;overflow
   {% for case in cases %}
     <tr>
       <td><code>{{ case.id }}</code></td><td>{{ case.level }}</td><td>{{ case.name }}</td>
-      <td class="{{ 'ok' if case.passed is true else 'bad' if case.passed is false else '' }}" style="font-weight:700">{{ 'PASS' if case.passed is true else ('FAIL' if case.passed is false else '—') }}</td>
+      <td class="{{ 'ok' if case.passed is true else ('bad' if case.passed is false else ('warn-text' if case.warn else '')) }}" style="font-weight:700">{{ 'PASS' if case.passed is true else ('FAIL' if case.passed is false else ('WARN' if case.warn else '—')) }}</td>
       <td>{{ case.http or '—' }}</td><td>{{ case.e2e_ms|round(0)|int if case.e2e_ms is not none else '—' }}</td><td>{{ case.ttfb_ms|round(0)|int if case.ttfb_ms is not none else '—' }}</td><td>{{ case.ttft_ms|round(0)|int if case.ttft_ms is not none else '—' }}</td>
       <td>{{ case.note }}</td>
     </tr>
@@ -798,21 +821,26 @@ pre.mtb{background:#1b1b1b;color:#f5f5f5;padding:14px;border-radius:8px;overflow
   {% endif %}
 
   {% if provider.latency %}
-  <h4>延迟 · TTFT / TTFB / TPOT / ITL / E2E</h4>
+  <h4>延迟 · TTFT / TTFB / TPOT / ITL / E2E{% if provider.latency.thinking %} / 思考模式 TTFR·TTFC{% endif %}</h4>
   <table>
     <thead><tr><th>指标</th><th>avg</th><th>p50</th><th>p75</th><th>p90</th><th>p95</th><th>p99</th></tr></thead>
     <tbody>
       <tr><td>TTFB（首字节）</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.ttfb[key]|round(0)|int if provider.latency.ttfb and provider.latency.ttfb[key] is not none else '-' }}</td>{% endfor %}</tr>
       <tr><td>TTFT（流式）</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.ttft[key]|round(0)|int if provider.latency.ttft and provider.latency.ttft[key] is not none else '-' }}</td>{% endfor %}</tr>
+      {% if provider.latency.thinking %}
+      <tr><td>TTFR（首个推理 token）</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.ttfr[key]|round(0)|int if provider.latency.ttfr and provider.latency.ttfr[key] is not none else '-' }}</td>{% endfor %}</tr>
+      <tr><td>TTFC（首个正文 token）</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.ttfc[key]|round(0)|int if provider.latency.ttfc and provider.latency.ttfc[key] is not none else '-' }}</td>{% endfor %}</tr>
+      <tr><td>思考开销（TTFC−TTFR）</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.overhead[key]|round(0)|int if provider.latency.overhead and provider.latency.overhead[key] is not none else '-' }}</td>{% endfor %}</tr>
+      {% endif %}
       <tr><td>TPOT</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.tpot[key]|num('%.2f') if provider.latency.tpot and provider.latency.tpot[key] is not none else '-' }}</td>{% endfor %}</tr>
       <tr><td>E2E</td>{% for key in ['mean','p50','p75','p90','p95','p99'] %}<td>{{ provider.latency.e2e[key]|round(0)|int if provider.latency.e2e and provider.latency.e2e[key] is not none else '-' }}</td>{% endfor %}</tr>
     </tbody>
   </table>
   {% if provider.latency.details %}
-  <h5>流式用例 TTFT 明细</h5>
-  <table><thead><tr><th>Case</th><th>TTFT ms</th><th>TTFB ms</th><th>E2E ms</th></tr></thead><tbody>
+  <h5>流式用例 TTFT 明细{% if provider.latency.thinking %}（思考模式）{% endif %}</h5>
+  <table><thead><tr><th>Case</th><th>TTFT ms</th>{% if provider.latency.thinking %}<th>TTFR ms</th><th>TTFC ms</th>{% endif %}<th>TTFB ms</th><th>E2E ms</th></tr></thead><tbody>
   {% for detail in provider.latency.details %}
-    <tr><td><code>{{ detail.case_id }}</code></td><td>{{ detail.ttft_ms|round(0)|int if detail.ttft_ms is not none else '-' }}</td><td>{{ detail.ttfb_ms|round(0)|int if detail.ttfb_ms is not none else '-' }}</td><td>{{ detail.e2e_ms|round(0)|int if detail.e2e_ms is not none else '-' }}</td></tr>
+    <tr><td><code>{{ detail.case_id }}</code></td><td>{{ detail.ttft_ms|round(0)|int if detail.ttft_ms is not none else '-' }}</td>{% if provider.latency.thinking %}<td>{{ detail.ttfr_ms|round(0)|int if detail.ttfr_ms is not none else '-' }}</td><td>{{ detail.ttfc_ms|round(0)|int if detail.ttfc_ms is not none else '-' }}</td>{% endif %}<td>{{ detail.ttfb_ms|round(0)|int if detail.ttfb_ms is not none else '-' }}</td><td>{{ detail.e2e_ms|round(0)|int if detail.e2e_ms is not none else '-' }}</td></tr>
   {% endfor %}
   </tbody></table>
   {% endif %}
