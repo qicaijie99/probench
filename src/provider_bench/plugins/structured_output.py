@@ -122,7 +122,6 @@ class StructuredOutputPlugin(BenchmarkPlugin[StructuredOutputSettings]):
                 messages=[{"role": "user", "content": case.prompt}],
                 stream=False,
                 max_tokens=self.settings.max_tokens,
-                temperature=0,
                 response_format=response_format,
             )
             await self.context.record(record)

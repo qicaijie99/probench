@@ -66,7 +66,7 @@ class FakeProvider(Provider):
         messages: list[dict[str, Any]],
         stream: bool = True,
         max_tokens: int = 128,
-        temperature: float = 0,
+        temperature: float | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | list[str] | None = None,
         response_format: dict[str, Any] | None = None,

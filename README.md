@@ -295,6 +295,8 @@ output_dir: outputs
 > **思考模式延迟**：当目标是思考型模型（如 K3 启用了 thinking），在 `latency` 块中开启 `thinking: true` 即可让每条流式请求带上 `enable_thinking: true`，并在报告延迟表中新增 TTFR（首个推理 token）/ TTFC（首个正文 token）/ 思考开销三行。务必同时提供会真正触发思考的多步推理 `thinking_prompt`（默认内置了一道多步数学题），否则 trivially 简单提示词测不出有意义的思考耗时。
 >
 > 对 reasoning 模型（如 K3），`latency` / `protocol` / `billing` 的 `max_tokens` 要给足（示例统一为 512），否则思考 token 会挤占输出预算，导致 `content` 为空、TTFT/多模态/工具参数被误判失败。非 reasoning 模型可用更小值。
+>
+> 对采样参数固定、只接受单个值的模型（如 K3 只允许 `temperature=1`），在 Provider 上配置 `default_temperature: 1`，所有插件未显式指定 temperature 时都会使用它；`features.param_cases` 里的固定值/拒绝值不受影响（仍按各用例取值发送）。
 
 ### 3. 校验并运行
 
@@ -375,6 +377,7 @@ provider-bench validate benchmark.yaml
 | `max_connections` | 否 | `256` | HTTP 连接池最大连接数 |
 | `max_keepalive_connections` | 否 | `128` | Keep-alive 最大连接数，不可大于 `max_connections` |
 | `headers` | 否 | `{}` | 额外认证或路由 Header；所有值均按敏感信息脱敏 |
+| `default_temperature` | 否 | `None` | 所有插件未显式指定 temperature 时使用的默认值；固定采样参数的模型（如 K3 只允许 `1`）设置后即可全插件生效 |
 
 自定义 Header 示例：
 

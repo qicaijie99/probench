@@ -91,3 +91,32 @@ async def test_openai_provider_stream_error_surfaces_status() -> None:
     assert result.status_code == 503
     assert "model_not_found" in (result.error or "")
     assert "ResponseNotRead" not in (result.error or "")
+
+
+async def test_openai_provider_default_temperature_applies_and_explicit_wins() -> None:
+    seen: list[dict[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return httpx.Response(
+            200, json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]}
+        )
+
+    provider = OpenAICompatibleProvider(
+        ProviderConfig(
+            name="mock",
+            base_url="https://mock.test/v1",
+            api_key="secret",
+            model="model-a",
+            default_temperature=1,
+        ),
+        transport=httpx.MockTransport(handler),
+    )
+    await provider.chat(case_id="default", messages=[], stream=False)
+    await provider.chat(case_id="explicit", messages=[], stream=False, temperature=0.5)
+    await provider.chat(case_id="omitted", messages=[], stream=False, omit_temperature=True)
+    await provider.close()
+
+    assert seen[0]["temperature"] == 1
+    assert seen[1]["temperature"] == 0.5
+    assert "temperature" not in seen[2]

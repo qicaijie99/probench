@@ -44,7 +44,6 @@ class ProtocolPlugin(BenchmarkPlugin[ProtocolSettings]):
             messages=messages,
             stream=stream,
             max_tokens=self.settings.max_tokens,
-            temperature=0,
             extra=extra,
         )
         await self.context.record(record)

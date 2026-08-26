@@ -87,6 +87,7 @@ class OpenAICompatibleProvider(Provider):
         self.name = config.name
         self.model = config.model
         self._stream_include_usage = config.stream_include_usage
+        self._default_temperature = config.default_temperature
         try:
             self._encoding = tiktoken.encoding_for_model(config.model)
         except KeyError:
@@ -157,7 +158,7 @@ class OpenAICompatibleProvider(Provider):
         messages: list[dict[str, Any]],
         stream: bool = True,
         max_tokens: int = 128,
-        temperature: float = 0,
+        temperature: float | None = None,
         tools: list[dict[str, Any]] | None = None,
         tool_choice: str | dict[str, Any] | list[str] | None = None,
         response_format: dict[str, Any] | None = None,
@@ -171,8 +172,15 @@ class OpenAICompatibleProvider(Provider):
             "stream": stream,
             "max_tokens": max_tokens,
         }
+        effective_temperature = (
+            temperature
+            if temperature is not None
+            else self._default_temperature
+            if self._default_temperature is not None
+            else 0.0
+        )
         if not omit_temperature:
-            payload["temperature"] = temperature
+            payload["temperature"] = effective_temperature
         if tools is not None:
             payload["tools"] = tools
         if tool_choice is not None:

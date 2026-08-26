@@ -81,7 +81,6 @@ class BillingPlugin(BenchmarkPlugin[BillingSettings]):
                 messages=messages,
                 stream=False,
                 max_tokens=self.settings.max_tokens,
-                temperature=0,
             )
             await self.context.record(record)
             results.append(self._measure(record, messages))

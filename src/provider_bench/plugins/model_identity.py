@@ -82,7 +82,6 @@ class ModelIdentityPlugin(BenchmarkPlugin[ModelIdentitySettings]):
                 messages=[{"role": "user", "content": probe.prompt}],
                 stream=False,
                 max_tokens=probe.max_tokens,
-                temperature=0,
                 seed=self.settings.seed,
             )
             await self.context.record(record)

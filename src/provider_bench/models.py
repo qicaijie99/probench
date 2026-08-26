@@ -26,6 +26,7 @@ class ProviderConfig(BaseModel):
     max_connections: int = Field(default=256, gt=0)
     max_keepalive_connections: int = Field(default=128, gt=0)
     headers: dict[str, SecretStr] = Field(default_factory=dict)
+    default_temperature: float | None = Field(default=None, ge=0, le=2)
 
     model_config = ConfigDict(extra="forbid")
 

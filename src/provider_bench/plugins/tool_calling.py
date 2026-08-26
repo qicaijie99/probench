@@ -151,7 +151,6 @@ class ToolCallingPlugin(BenchmarkPlugin[ToolCallingSettings]):
                 messages=[{"role": "user", "content": case.prompt}],
                 stream=False,
                 max_tokens=self.settings.max_tokens,
-                temperature=0,
                 tools=case.tools,
                 tool_choice="auto",
             )
@@ -238,7 +237,6 @@ class ToolCallingPlugin(BenchmarkPlugin[ToolCallingSettings]):
             messages=[{"role": "user", "content": "北京今天天气怎么样？请按需使用工具。"}],
             stream=False,
             max_tokens=self.settings.max_tokens,
-            temperature=0,
             tools=tools,
             tool_choice=tool_choice,
         )

@@ -5,10 +5,13 @@ providers:
     base_url: https://official.example.com/v1
     api_key: ${OFFICIAL_API_KEY}
     model: model-name
+    # 采样参数固定（只接受单个值）的模型：如 K3 只允许 temperature=1，设置后所有插件继承
+    # default_temperature: 1
   - name: candidate
     base_url: https://candidate.example.com/v1
     api_key: ${CANDIDATE_API_KEY}
     model: model-name
+    # default_temperature: 1
 
 reference_provider: official
 

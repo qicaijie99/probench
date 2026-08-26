@@ -89,7 +89,7 @@ benchmarks:
   burst: { enabled: false }
 ```
 
-If the target is a reasoning model (e.g. K3) whose sampling params are **fixed** (only one accepted value), set the `features.param_cases` list to the model's accepted values as `expect: accept` and everything else as `expect: reject`. When in doubt, ask the user for the model's official parameter policy before running.
+If the target is a reasoning model (e.g. K3) whose sampling params are **fixed** (only one accepted value), set `provider.default_temperature` to the accepted value (e.g. K3 allows only `temperature=1`) so every plugin inherits it instead of sending the default `0`. Also set the `features.param_cases` list to the model's accepted values as `expect: accept` and everything else as `expect: reject`. When in doubt, ask the user for the model's official parameter policy before running.
 
 **宽松网关 → WARN（不计失败）**：`features` 的参数约束里，`expect: reject` 的越界采样参数（如 `temperature=1.1`、`top_p=0.8` 等）若被网关以 200 接受，说明网关**不校验采样参数范围**，这类结果在报告里显示为 `WARN`（宽松网关），**不计入 FAIL 错误用例、也不拉低 `features_param` 得分**。真正算失败的只有 `expect: accept` 却请求失败的情况。
 

@@ -91,7 +91,6 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
                 messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
                 stream=False,
                 max_tokens=self.settings.max_tokens,
-                temperature=0,
                 extra={"reasoning_effort": level},
             )
             await self.context.record(record)
@@ -118,7 +117,6 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
             messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
             stream=False,
             max_tokens=self.settings.max_tokens,
-            temperature=0,
         )
         await self.context.record(default)
         default_reasoning = bool(default.response.get("reasoning_content")) or bool(
@@ -164,7 +162,6 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
                 messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
                 stream=False,
                 max_tokens=self.settings.max_tokens,
-                temperature=0,
                 extra=body,
             )
             await self.context.record(record)
@@ -201,7 +198,6 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
             messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
             stream=False,
             max_tokens=budget,
-            temperature=0,
             extra={"enable_thinking": True},
         )
         await self.context.record(on)
@@ -210,7 +206,6 @@ class FeaturesPlugin(BenchmarkPlugin[FeaturesSettings]):
             messages=[{"role": "user", "content": self.settings.reasoning_prompt}],
             stream=False,
             max_tokens=budget,
-            temperature=0,
             extra={"enable_thinking": False},
         )
         await self.context.record(off)

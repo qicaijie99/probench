@@ -22,7 +22,7 @@ class LatencySettings(PluginSettings):
     prompt: str = "Explain why low latency matters for interactive APIs."
     system_prompt: str | None = None
     max_tokens: int = Field(default=128, gt=0)
-    temperature: float = Field(default=0, ge=0, le=2)
+    temperature: float | None = Field(default=None, ge=0, le=2)
     extra: dict[str, Any] | None = None
     thinking: bool = False
     thinking_prompt: str | None = None
