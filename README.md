@@ -254,7 +254,16 @@ benchmarks:
   model_identity: { enabled: true, repetitions: 2 }
   billing: { enabled: true, max_tokens: 512 }
   quality: { enabled: true }
-  latency: { enabled: true, warmup: 1, repetitions: 10, max_tokens: 512 }
+  latency:
+    enabled: true
+    warmup: 1
+    repetitions: 10
+    max_tokens: 512
+    # 思考模式延迟：测量 TTFR（首个推理 token）/ TTFC（首个正文 token）/ 思考开销（TTFC−TTFR）
+    # thinking: true
+    # thinking_prompt: "关于西游记原文思考并生成万字报告"
+    # extra:
+    #   reasoning_effort: high
   benchmark:
     enabled: true
     sessions: 4
@@ -281,6 +290,10 @@ benchmarks:
 output_dir: outputs
 ```
 
+> **思考开关测试**：`features` 会额外对比 `enable_thinking=true` 与 `enable_thinking=false` 两档，判断网关能否真正关闭思考。若 `false` 仍产生推理 token，报告显示 `WARN`（网关无法关闭思考），也不计失败。可用 `features.check_thinking_toggle: false` 关闭该测试。
+>
+> **思考模式延迟**：当目标是思考型模型（如 K3 启用了 thinking），在 `latency` 块中开启 `thinking: true` 即可让每条流式请求带上 `enable_thinking: true`，并在报告延迟表中新增 TTFR（首个推理 token）/ TTFC（首个正文 token）/ 思考开销三行。务必同时提供会真正触发思考的多步推理 `thinking_prompt`（默认内置了一道多步数学题），否则 trivially 简单提示词测不出有意义的思考耗时。
+>
 > 对 reasoning 模型（如 K3），`latency` / `protocol` / `billing` 的 `max_tokens` 要给足（示例统一为 512），否则思考 token 会挤占输出预算，导致 `content` 为空、TTFT/多模态/工具参数被误判失败。非 reasoning 模型可用更小值。
 
 ### 3. 校验并运行
@@ -295,7 +308,7 @@ provider-bench run benchmark.yaml        # 结束打印 Report: outputs/<run-id>
 
 ### 4. 验证报告
 
-用浏览器打开 `report.html`，确认每个 Provider 都包含：总体结论、评分子项、功能用例表、缓存命中率（含每轮 Token 构成柱状图）、返回模型汇总、延迟分位数（TTFB/TTFT/TPOT/ITL/E2E）+ 流式用例明细、`BENCHMARK RESULTS`、基线对照、分会话明细、8 张 ECharts 图表、并发探针、失败详情、Provider 对比（双 Provider 时）。
+用浏览器打开 `report.html`，确认每个 Provider 都包含：总体结论、评分子项、功能用例表（含「思考开关 · enable_thinking 开/关对比」）、缓存命中率（含每轮 Token 构成柱状图）、返回模型汇总、延迟分位数（TTFB/TTFT/TPOT/ITL/E2E，启用思考模式时含 TTFR/TTFC/思考开销）+ 流式用例明细、`BENCHMARK RESULTS`、基线对照、分会话明细、8 张 ECharts 图表、并发探针、失败详情、Provider 对比（双 Provider 时）。
 
 ### 5. 按维度解读
 
