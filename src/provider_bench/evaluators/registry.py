@@ -59,6 +59,19 @@ async def exact_match(
     )
 
 
+@evaluator("contains")
+async def contains_match(
+    case: QualityCase, response: str, context: EvaluatorContext
+) -> EvaluationResult:
+    expected = _normalize(str(case.expected))
+    passed = bool(expected) and expected in _normalize(response)
+    return EvaluationResult(
+        passed=passed,
+        score=float(passed),
+        reason=None if passed else f"expected response containing {expected!r}",
+    )
+
+
 _NUMBER = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
 
 
@@ -191,12 +204,12 @@ async def llm_judge(
         "Return JSON with passed (boolean), score (number 0..1), and reason (string).\n\n"
         f"Question:\n{case.prompt}\n\nRubric:\n{case.rubric}\n\nCandidate answer:\n{response}"
     )
+    judge_max_tokens = getattr(context.settings, "max_tokens", None) or 0
     record = await judge.chat(
         case_id=f"quality.judge.{case.id}",
         messages=[{"role": "user", "content": prompt}],
         stream=False,
-        max_tokens=256,
-        temperature=0,
+        max_tokens=max(judge_max_tokens, case.max_tokens, 512),
         response_format={"type": "json_object"},
     )
     await context.plugin.record(record)

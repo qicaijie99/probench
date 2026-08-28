@@ -78,18 +78,52 @@ class FakeProvider(Provider):
         tool_calls = None
         if case_id == "quality.math-arithmetic-01":
             content = "42"
+        elif case_id == "quality.math-arithmetic-02":
+            content = "100"
+        elif case_id == "quality.math-fraction-01":
+            content = "0.5"
+        elif case_id == "quality.math-percent-01":
+            content = "30"
         elif case_id == "quality.reasoning-logic-01":
             content = "YES"
+        elif case_id == "quality.reasoning-arithmetic-word-01":
+            content = "4"
+        elif case_id == "quality.reasoning-schedule-01":
+            content = "9"
+        elif case_id == "quality.reasoning-mix-01":
+            content = "12"
         elif case_id == "quality.chinese-knowledge-01":
             content = "王勃"
+        elif case_id == "quality.chinese-knowledge-02":
+            content = "千里共婵娟"
+        elif case_id == "quality.chinese-knowledge-03":
+            content = "毕昇"
+        elif case_id == "quality.chinese-knowledge-04":
+            content = "罗贯中"
         elif case_id == "quality.code-python-01":
             content = "def add(a, b):\n    return a + b"
+        elif case_id == "quality.code-python-02":
+            content = "def is_even(n):\n    return n % 2 == 0"
+        elif case_id == "quality.code-python-03":
+            content = "def max_of_three(a, b, c):\n    return max(a, b, c)"
+        elif case_id == "quality.code-python-04":
+            content = "def reverse_string(s):\n    return s[::-1]"
         elif case_id == "quality.instruction-following-01":
             content = "BLUE"
-        elif case_id == "quality.json-basic-01":
-            content = '{"name":"Ada","age":36}'
+        elif case_id == "quality.instruction-following-02":
+            content = "红 绿 蓝"
         elif case_id == "quality.instruction-judge-01":
             content = "记录超时有助于故障诊断。"
+        elif case_id == "quality.instruction-judge-02":
+            content = "缓存命中可显著降低成本。"
+        elif case_id == "quality.json-basic-01":
+            content = '{"name":"Ada","age":36}'
+        elif case_id == "quality.json-basic-02":
+            content = '{"ok":true,"count":3}'
+        elif case_id == "quality.json-nested-01":
+            content = '{"order_id":"ORD-1","items":[{"sku":"A1","qty":2}]}'
+        elif case_id == "quality.json-list-01":
+            content = "[1, 2, 3]"
         elif case_id.startswith("quality.judge."):
             content = '{"passed":true,"score":0.95,"reason":"meets rubric"}'
         elif case_id == "tool_calling.selection-weather":

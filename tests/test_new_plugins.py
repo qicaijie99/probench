@@ -252,3 +252,40 @@ async def test_quality_max_tokens_floor(tmp_path: Path) -> None:
     await BenchmarkEngine(provider_factory=lambda _: provider).run(config, run_id="quality-floor")
     assert provider.case_budgets
     assert all(budget >= 512 for _, budget in provider.case_budgets)
+
+
+async def test_quality_falls_back_to_reasoning_content_when_content_empty(
+    tmp_path: Path,
+) -> None:
+    class ReasoningOnlyProvider(FakeProvider):
+        async def chat(self, **kwargs):
+            result = await super().chat(**kwargs)
+            if kwargs["case_id"] == "quality.chinese-knowledge-01":
+                result.response["content"] = ""
+                result.response["reasoning_content"] = "The author is 王勃."
+            return result
+
+    config = AppConfig.model_validate(
+        {
+            "provider": {
+                "name": "fake",
+                "base_url": "https://fake.test/v1",
+                "api_key": "secret",
+                "model": "fake-model",
+            },
+            "output_dir": str(tmp_path),
+            "benchmarks": {
+                "quality": {
+                    "enabled": True,
+                    "categories": ["chinese_knowledge"],
+                    "max_cases": 1,
+                }
+            },
+        }
+    )
+    result = await BenchmarkEngine(provider_factory=lambda _: ReasoningOnlyProvider()).run(
+        config, run_id="quality-reasoning-fallback"
+    )
+    metrics = result.providers["fake"].plugins["quality"].metrics
+    assert metrics["results"][0]["response_source"] == "reasoning_content"
+    assert metrics["results"][0]["passed"] is True

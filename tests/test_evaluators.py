@@ -61,3 +61,17 @@ async def test_code_evaluator_runs_tests_and_rejects_imports(tmp_path: Path) -> 
     assert not rejected.passed
     assert "disallowed" in (rejected.reason or "")
 
+
+async def test_contains_evaluator_accepts_wrapped_answer(tmp_path: Path) -> None:
+    case = QualityCase(
+        id="knowledge",
+        category="chinese_knowledge",
+        prompt="x",
+        evaluator="contains",
+        expected="王勃",
+    )
+    assert (await evaluate_case(case, "《滕王阁序》的作者是王勃。", _context(tmp_path))).passed
+    wrong = await evaluate_case(case, "《滕王阁序》的作者是李白。", _context(tmp_path))
+    assert not wrong.passed
+    assert "王勃" in (wrong.reason or "")
+

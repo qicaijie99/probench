@@ -82,6 +82,7 @@ class QualityPlugin(BenchmarkPlugin[QualitySettings]):
             )
             await self.context.record(record)
             if record.status != "success":
+                response_source = "error"
                 evaluation = {
                     "passed": False,
                     "score": 0.0,
@@ -89,10 +90,16 @@ class QualityPlugin(BenchmarkPlugin[QualitySettings]):
                     "details": {},
                 }
             else:
+                content = str(record.response.get("content") or "")
+                reasoning = str(record.response.get("reasoning_content") or "")
+                candidate = content or reasoning
+                response_source = (
+                    "content" if content else "reasoning_content" if reasoning else "empty"
+                )
                 evaluated = await evaluate_case(
                     case,
-                    str(record.response.get("content") or ""),
-                    EvaluatorContext(plugin=self.context),
+                    candidate,
+                    EvaluatorContext(plugin=self.context, settings=self.settings),
                 )
                 evaluation = evaluated.model_dump(mode="json")
             return {
@@ -100,6 +107,7 @@ class QualityPlugin(BenchmarkPlugin[QualitySettings]):
                 "category": case.category,
                 "evaluator": case.evaluator,
                 "request_id": record.request_id,
+                "response_source": response_source,
                 **evaluation,
             }
 

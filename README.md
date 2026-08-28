@@ -25,7 +25,7 @@ Provider Bench 是一个面向任意 OpenAI-compatible API 的异步 Benchmark �
 - TTFT、TTFB、TPOT、ITL、E2E、Output TPS 及 P50/P75/P90/P95/P99
 - Success Rate、429、5xx、Timeout、SSL 错误、最大稳定并发和突发批次统计
 - 内置数学、推理、中文知识、代码、指令遵循和 JSON 数据集
-- Exact Match、Numeric、JSON Schema、Code Test、LLM Judge 五类评估器
+- Exact Match、Contains、Numeric、JSON Schema、Code Test、LLM Judge 六类评估器
 - `tiktoken` 本地 Token 计数、Provider usage 偏差与成本估算
 - 网关合规 / 模型能力 / 性能 三维度评分，Hard Gate 和 PASS/WARN/FAIL 验收结论
 - 阶梯/突发并发探针（含最大稳定并发量）、前缀缓存命中率、会话/轮次压测
@@ -499,7 +499,7 @@ provider-bench compare <run-a> <run-b> --output-dir outputs
 
 ## Quality 数据集与 Judge
 
-内置 `builtin:core` 数据集覆盖：
+内置 `builtin:core` 数据集共 24 道题，覆盖六个类别（每类 4 题），避免单一样本随机波动：
 
 - `math`
 - `reasoning`
@@ -568,7 +568,8 @@ benchmarks:
 
 | Evaluator | 必要字段 | 说明 |
 | --- | --- | --- |
-| `exact_match` | `expected` | 规范化后精确匹配 |
+| `exact_match` | `expected` | 规范化后精确匹配，适合严格指令遵循 |
+| `contains` | `expected` | 规范化后检查答案是否包含 `expected`，适合知识类（如「作者是王勃」也算对） |
 | `numeric` | `expected`，可选 `tolerance` | 数值与容差匹配 |
 | `json_validator` | 可选 `expected`、`json_schema` | 校验 JSON、期望内容和 Schema |
 | `code_test` | `code_tests` | 在隔离 Python 子进程中执行断言 |
@@ -585,6 +586,8 @@ judge_provider:
 ```
 
 没有 `judge_provider` 时，LLM Judge 使用当前被测 Provider，因此每个被测 Provider 可能得到不同的 Judge 行为。正式横向验收建议配置固定的独立 Judge。
+
+对 reasoning 模型（如 K3）：quality 请求与 Judge 请求都会在 `content` 为空时回退读取 `reasoning_content`（结果里标记 `response_source`），内置用例的 `max_tokens` 也已按 reasoning 模型给足（128–256，Judge 下限 512），不会因思考 token 挤占预算而误报「候选答案为空」。仍建议在 `quality` 上配置 `max_tokens: 512` 作为各用例预算下限。
 
 Code Test 会拒绝 import、文件访问、动态执行和私有属性，并限制执行时间、内存与文件大小，但它不是面向敌意代码的系统级沙箱。只应运行可信数据集中的测试代码。
 
@@ -618,23 +621,23 @@ Token 估算依赖所选模型或 `tokenizer_encoding`。不同 Provider 的服�
 
 ```yaml
 scoring:
-  weights:
-    quality: 30
-    latency: 15
-    throughput: 10
-    concurrency: 15
-    reliability: 10
-    compatibility: 4
-    protocol: 4
-    structured_output: 4
-    tool_calling: 3
-    tool_choice: 2
-    features_thinking: 3
-    features_param: 2
-    cache: 5
-    model_identity: 3
-    billing: 4
-    cost: 3
+  weights:  # 默认权重，各项之和 = 100
+    quality: 25.65
+    latency: 12.82
+    throughput: 8.55
+    concurrency: 12.82
+    reliability: 8.55
+    compatibility: 3.42
+    protocol: 3.42
+    structured_output: 3.42
+    tool_calling: 2.56
+    tool_choice: 1.71
+    features_thinking: 2.56
+    features_param: 1.71
+    cache: 4.27
+    model_identity: 2.56
+    billing: 3.42
+    cost: 2.56
   latency_ttft_good_ms: 1000
   latency_ttft_fail_ms: 10000
   output_tps_target: 20
@@ -696,7 +699,7 @@ Gate 引用的插件应在最终验收配置中启用；指标缺失会被视为
 加权总分 = Σ(组件分 × 该组件权重) ÷ Σ(有指标组件的权重)
 ```
 
-默认权重见上方配置示例（quality 30、latency 15、throughput 10、concurrency 15、reliability 10、cache 5、compatibility/protocol/structured_output/billing 各 4、tool_calling/features_thinking/model_identity/cost 各 3、tool_choice/features_param 各 2）。
+默认权重见上方配置示例（各项之和为 100，quality 25.65、latency 12.82、throughput 8.55、concurrency 12.82、reliability 8.55、cache 4.27、compatibility/protocol/structured_output/billing 各 3.42、tool_calling/features_thinking/model_identity/cost 各 2.56、tool_choice/features_param 各 1.71）。
 
 三维度分使用与总分相同的加权公式，仅在其成员组件内计算：
 

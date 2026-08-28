@@ -19,4 +19,5 @@ class EvaluationResult(BaseModel):
 @dataclass
 class EvaluatorContext:
     plugin: PluginContext
+    settings: Any = None
 

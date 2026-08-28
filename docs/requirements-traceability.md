@@ -13,7 +13,7 @@
 | Concurrency 阶梯与稳定并发 | `plugins/concurrency.py`；默认 1..128；Provider 默认 256 连接 | `test_concurrency_and_burst_execute_configured_parallel_batches` |
 | Burst 10/25/50/100 | `plugins/burst.py` | `test_concurrency_and_burst_execute_configured_parallel_batches` |
 | Quality 六类数据 | `datasets/core.yaml`、自定义 YAML loader/filter | `test_quality_tool_structured_identity_and_billing_plugins` |
-| 五种 Evaluator | `evaluators/registry.py`；Exact/Numeric/JSON Schema/受限 Code/LLM Judge | `test_evaluators.py`、剩余插件集成测试 |
+| 六种 Evaluator | `evaluators/registry.py`；Exact/Contains/Numeric/JSON Schema/受限 Code/LLM Judge | `test_evaluators.py`、剩余插件集成测试 |
 | Tool Calling | `plugins/tool_calling.py`；selection/arguments/JSON/schema | 剩余插件集成测试 |
 | Structured Output | `plugins/structured_output.py`；object/schema/nested | 剩余插件集成测试 |
 | Model Identity | `plugins/model_identity.py`；reported model/fingerprint/probe hash/consistency/baseline | 多 Provider comparison 测试 |

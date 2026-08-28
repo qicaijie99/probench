@@ -81,7 +81,7 @@ async def test_quality_tool_structured_identity_and_billing_plugins(tmp_path: Pa
     plugins = result.providers["fake"].plugins
 
     assert all(plugin.status == RunStatus.COMPLETED for plugin in plugins.values())
-    assert plugins["quality"].metrics["cases"] == 7
+    assert plugins["quality"].metrics["cases"] == 24
     assert plugins["quality"].metrics["pass_rate"] == 1
     assert plugins["quality"].metrics["evaluators"]["llm_judge"]["score"] == 0.95
     assert plugins["tool_calling"].metrics["success_rate"] == 1

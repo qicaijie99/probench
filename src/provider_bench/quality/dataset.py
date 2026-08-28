@@ -12,7 +12,9 @@ class QualityCase(BaseModel):
     id: str = Field(min_length=1)
     category: str = Field(min_length=1)
     prompt: str = Field(min_length=1)
-    evaluator: str = Field(pattern=r"^(exact_match|numeric|json_validator|code_test|llm_judge)$")
+    evaluator: str = Field(
+        pattern=r"^(exact_match|contains|numeric|json_validator|code_test|llm_judge)$"
+    )
     expected: Any = None
     tolerance: float = Field(default=0.0, ge=0)
     json_schema: dict[str, Any] | None = None

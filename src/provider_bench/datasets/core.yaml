@@ -4,21 +4,90 @@
   evaluator: numeric
   expected: 42
   tolerance: 0
-  max_tokens: 16
+  max_tokens: 128
+
+- id: math-arithmetic-02
+  category: math
+  prompt: "计算 12 × 12 - 44。只输出数字。"
+  evaluator: numeric
+  expected: 100
+  tolerance: 0
+  max_tokens: 128
+
+- id: math-fraction-01
+  category: math
+  prompt: "计算 1/4 + 1/4，用小数表示。只输出数字。"
+  evaluator: numeric
+  expected: 0.5
+  tolerance: 0.01
+  max_tokens: 128
+
+- id: math-percent-01
+  category: math
+  prompt: "200 的 15% 是多少？只输出数字。"
+  evaluator: numeric
+  expected: 30
+  tolerance: 0.01
+  max_tokens: 128
 
 - id: reasoning-logic-01
   category: reasoning
   prompt: "所有 A 都是 B，没有 B 是 C。能否推出没有 A 是 C？只回答 YES 或 NO。"
   evaluator: exact_match
   expected: "YES"
-  max_tokens: 16
+  max_tokens: 128
+
+- id: reasoning-arithmetic-word-01
+  category: reasoning
+  prompt: "甲和乙一共有 12 个，乙比甲多 4 个。甲有几个？只输出数字。"
+  evaluator: numeric
+  expected: 4
+  tolerance: 0
+  max_tokens: 128
+
+- id: reasoning-schedule-01
+  category: reasoning
+  prompt: "一辆车 8:40 出发，行驶 20 分钟到达。到达时间是几点（24 小时制）？只输出小时数。"
+  evaluator: numeric
+  expected: 9
+  tolerance: 0
+  max_tokens: 128
+
+- id: reasoning-mix-01
+  category: reasoning
+  prompt: "3 个苹果每个 2 元，2 个香蕉每个 3 元，一共多少钱？只输出数字。"
+  evaluator: numeric
+  expected: 12
+  tolerance: 0
+  max_tokens: 128
 
 - id: chinese-knowledge-01
   category: chinese_knowledge
-  prompt: "《滕王阁序》的作者是谁？只输出姓名。"
-  evaluator: exact_match
+  prompt: "《滕王阁序》的作者是谁？"
+  evaluator: contains
   expected: "王勃"
-  max_tokens: 16
+  max_tokens: 128
+
+- id: chinese-knowledge-02
+  category: chinese_knowledge
+  prompt: "「但愿人长久」的下一句是什么？"
+  evaluator: contains
+  expected: "千里共婵娟"
+  max_tokens: 128
+
+- id: chinese-knowledge-03
+  category: chinese_knowledge
+  prompt: "活字印刷术的发明者是谁？"
+  evaluator: contains
+  expected: "毕昇"
+  max_tokens: 128
+
+- id: chinese-knowledge-04
+  category: chinese_knowledge
+  prompt: "《三国演义》的作者是谁？"
+  evaluator: contains
+  expected: "罗贯中"
+  max_tokens: 128
 
 - id: code-python-01
   category: code
@@ -28,14 +97,64 @@
     - "assert add(2, 3) == 5"
     - "assert add(-2, 2) == 0"
     - "assert add('a', 'b') == 'ab'"
-  max_tokens: 128
+  max_tokens: 256
+
+- id: code-python-02
+  category: code
+  prompt: "仅输出 Python 代码，定义函数 is_even(n)，n 为偶数返回 True，否则返回 False。不要导入模块。"
+  evaluator: code_test
+  code_tests:
+    - "assert is_even(2) is True"
+    - "assert is_even(3) is False"
+  max_tokens: 256
+
+- id: code-python-03
+  category: code
+  prompt: "仅输出 Python 代码，定义函数 max_of_three(a, b, c)，返回三者中的最大值。不要导入模块。"
+  evaluator: code_test
+  code_tests:
+    - "assert max_of_three(1, 5, 3) == 5"
+    - "assert max_of_three(-1, -5, -3) == -1"
+  max_tokens: 256
+
+- id: code-python-04
+  category: code
+  prompt: "仅输出 Python 代码，定义函数 reverse_string(s)，返回字符串反转后的结果。不要导入模块。"
+  evaluator: code_test
+  code_tests:
+    - "assert reverse_string('abc') == 'cba'"
+    - "assert reverse_string('') == ''"
+  max_tokens: 256
 
 - id: instruction-following-01
   category: instruction_following
   prompt: "严格只输出单词 BLUE，不要标点，不要解释。"
   evaluator: exact_match
   expected: "BLUE"
-  max_tokens: 16
+  max_tokens: 128
+
+- id: instruction-following-02
+  category: instruction_following
+  prompt: "严格只输出三个词：红 绿 蓝（用空格分隔），不要其他任何内容。"
+  evaluator: exact_match
+  expected: "红 绿 蓝"
+  max_tokens: 128
+
+- id: instruction-judge-01
+  category: instruction_following
+  prompt: "用不超过 30 个汉字解释为什么 API 超时需要被记录。"
+  evaluator: llm_judge
+  rubric: "答案必须是中文、不超过30个汉字，并准确说明记录超时有助于可靠性分析或故障诊断。"
+  pass_threshold: 0.8
+  max_tokens: 128
+
+- id: instruction-judge-02
+  category: instruction_following
+  prompt: "用不超过 20 个汉字说明缓存对成本的影响。"
+  evaluator: llm_judge
+  rubric: "答案必须是中文、不超过20个汉字，并准确说明缓存命中可以降低请求成本或减少重复计算。"
+  pass_threshold: 0.8
+  max_tokens: 128
 
 - id: json-basic-01
   category: json
@@ -51,13 +170,50 @@
       age: {type: integer}
     required: [name, age]
     additionalProperties: false
-  max_tokens: 64
+  max_tokens: 128
 
-- id: instruction-judge-01
-  category: instruction_following
-  prompt: "用不超过 30 个汉字解释为什么 API 超时需要被记录。"
-  evaluator: llm_judge
-  rubric: "答案必须是中文、不超过30个汉字，并准确说明记录超时有助于可靠性分析或故障诊断。"
-  pass_threshold: 0.8
-  max_tokens: 64
+- id: json-basic-02
+  category: json
+  prompt: "只输出 JSON：对象包含 ok=true 和整数 count=3。"
+  evaluator: json_validator
+  expected:
+    ok: true
+    count: 3
+  json_schema:
+    type: object
+    properties:
+      ok: {type: boolean}
+      count: {type: integer}
+    required: [ok, count]
+    additionalProperties: false
+  max_tokens: 128
 
+- id: json-nested-01
+  category: json
+  prompt: "只输出 JSON：对象 order_id='ORD-1'，items 是数组，包含一个对象 {sku='A1', qty=2}。"
+  evaluator: json_validator
+  expected:
+    order_id: ORD-1
+    items:
+      - {sku: A1, qty: 2}
+  json_schema:
+    type: object
+    properties:
+      order_id: {type: string}
+      items:
+        type: array
+        items:
+          type: object
+          properties:
+            sku: {type: string}
+            qty: {type: integer}
+          required: [sku, qty]
+    required: [order_id, items]
+  max_tokens: 128
+
+- id: json-list-01
+  category: json
+  prompt: "只输出 JSON 数组，包含整数 1、2、3。"
+  evaluator: json_validator
+  expected: [1, 2, 3]
+  max_tokens: 128
