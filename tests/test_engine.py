@@ -3,10 +3,32 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from provider_bench.engine import BenchmarkEngine
+from provider_bench.engine import BenchmarkEngine, new_run_id
 from provider_bench.models import AppConfig, RunStatus
 
 from .fakes import FakeProvider
+
+
+def test_new_run_id_embeds_platform_and_model() -> None:
+    config = AppConfig.model_validate(
+        {
+            "provider": {
+                "name": "fake",
+                "base_url": "https://tokens.lynxtoncloud.com/v1",
+                "api_key": "secret",
+                "model": "kimi-k3",
+            },
+        }
+    )
+    run_id = new_run_id(config)
+    assert "tokens.lynxtoncloud.com" in run_id
+    assert "kimi-k3" in run_id
+    assert len(run_id.rsplit("-", 1)[1]) == 8
+
+
+def test_new_run_id_without_config_stays_compact() -> None:
+    run_id = new_run_id()
+    assert run_id.count("-") == 1
 
 
 async def test_engine_runs_plugins_and_writes_complete_artifacts(tmp_path: Path) -> None:

@@ -60,7 +60,7 @@ class RunManager:
         only: set[str] | None = None,
         parent_run_id: str | None = None,
     ) -> str:
-        run_id = new_run_id()
+        run_id = new_run_id(config)
         self.configs[run_id] = config
         self.states[run_id] = {
             "run_id": run_id,

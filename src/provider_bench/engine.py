@@ -4,6 +4,7 @@ import uuid
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import urlparse
 
 from provider_bench.models import (
     AppConfig,
@@ -29,8 +30,21 @@ async def _ignore_event(event: dict[str, Any]) -> None:
     return None
 
 
-def new_run_id() -> str:
-    return datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ") + "-" + uuid.uuid4().hex[:8]
+def _platform_name(base_url: str) -> str:
+    host = urlparse(base_url).netloc
+    if ":" in host:
+        host = host.rsplit(":", 1)[0]
+    return safe_name(host) or "unknown"
+
+
+def new_run_id(config: AppConfig | None = None) -> str:
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    suffix = uuid.uuid4().hex[:8]
+    if config is None or not config.selected_providers:
+        return f"{stamp}-{suffix}"
+    hosts = sorted({_platform_name(provider.base_url) for provider in config.selected_providers})
+    models = sorted({safe_name(provider.model) for provider in config.selected_providers})
+    return f"{stamp}-{'-'.join(hosts)}-{'-'.join(models)}-{suffix}"
 
 
 class BenchmarkEngine:
@@ -77,7 +91,7 @@ class BenchmarkEngine:
         run_id: str | None = None,
     ) -> RunResult:
         emit = event_handler or _ignore_event
-        run_id = run_id or new_run_id()
+        run_id = run_id or new_run_id(config)
         started = datetime.now(UTC)
         run_dir = config.output_dir / run_id
         run_dir.mkdir(parents=True, exist_ok=False)
