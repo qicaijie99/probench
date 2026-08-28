@@ -53,22 +53,22 @@ class HardGate(BaseModel):
 class ScoringConfig(BaseModel):
     weights: dict[str, float] = Field(
         default_factory=lambda: {
-            "quality": 30.0,
-            "latency": 15.0,
-            "throughput": 10.0,
-            "concurrency": 15.0,
-            "reliability": 10.0,
-            "compatibility": 4.0,
-            "protocol": 4.0,
-            "structured_output": 4.0,
-            "tool_calling": 3.0,
-            "tool_choice": 2.0,
-            "features_thinking": 3.0,
-            "features_param": 2.0,
-            "cache": 5.0,
-            "model_identity": 3.0,
-            "billing": 4.0,
-            "cost": 3.0,
+            "quality": 25.65,
+            "latency": 12.82,
+            "throughput": 8.55,
+            "concurrency": 12.82,
+            "reliability": 8.55,
+            "compatibility": 3.42,
+            "protocol": 3.42,
+            "structured_output": 3.42,
+            "tool_calling": 2.56,
+            "tool_choice": 1.71,
+            "features_thinking": 2.56,
+            "features_param": 1.71,
+            "cache": 4.27,
+            "model_identity": 2.56,
+            "billing": 3.42,
+            "cost": 2.56,
         }
     )
     gates: list[HardGate] = Field(default_factory=list)

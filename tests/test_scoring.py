@@ -4,6 +4,10 @@ from provider_bench.models import HardGate, PluginResult, RunStatus, ScoringConf
 from provider_bench.scoring import build_scorecard
 
 
+def test_default_weights_sum_to_100() -> None:
+    assert round(sum(ScoringConfig().weights.values()), 2) == 100.00
+
+
 def test_hard_gate_overrides_weighted_score() -> None:
     now = datetime.now(UTC)
     plugins = {
