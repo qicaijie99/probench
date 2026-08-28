@@ -665,6 +665,61 @@ Gate 的 `metric` 使用 `插件名.指标路径`，运算符支持 `>=`、`<=`�
 
 Gate 引用的插件应在最终验收配置中启用；指标缺失会被视为 Gate 未通过。
 
+### 组件评分细则
+
+每个组件的得分都是 0–100。下表列出各组件的数据来源与计算方式（对应 `src/provider_bench/scoring.py`）：
+
+| 组件 | 数据来源 | 计算方式 |
+| --- | --- | --- |
+| `compatibility` | 插件 `success_rate` | 成功用例占比 × 100 |
+| `protocol` | 插件 `success_rate` | 成功用例占比 × 100 |
+| `quality` | 插件 `score` | 各用例评估得分（0–1）的平均 × 100 |
+| `structured_output` | 插件 `success_rate` | 成功用例占比 × 100 |
+| `tool_calling` | 插件 `success_rate` | 成功用例占比 × 100 |
+| `tool_choice` | `branches_passed / branches_total` | 通过的 `tool_choice` 分支占比 × 100 |
+| `features_thinking` | `thinking` + `reasoning_effort` 的 passed/total | （思考默认+变体通过数 + reasoning_effort 通过数）÷ 两者用例总数 × 100；无用例则 0 |
+| `features_param` | `param_constraints` | 通过数 ÷（总用例 − WARN 数）× 100；宽松网关被 200 接受的越界参数按 WARN 计，**从分母剔除、不扣分** |
+| `cache` | 插件 `hit_rate` | 命中率 × 100 |
+| `model_identity` | `identity_score` | 成功比例 × 响应一致性 × 基线相似度，再 × 100；报告模型或指纹不匹配时直接为 0 |
+| `billing` | 插件 `within_tolerance_rate` | usage 偏差在 `allowed_deviation` 内的请求占比 × 100 |
+| `cost` | `cost_score` | `min(100, target_cost_per_request_usd ÷ 平均每请求成本 × 100)`；未配置目标成本或无成本数据时不参与 |
+| `latency` | 插件 `success_rate` × `latency_factor` | `latency_factor` 由 `ttft_ms.p95` 决定：≤ `latency_ttft_good_ms` → 1.0；≥ `latency_ttft_fail_ms` → 0.0；中间线性插值；无 p95 → 0 |
+| `throughput` | `output_tps.p50` | p50 ÷ `output_tps_target` × 100；无 p50 时不参与 |
+| `concurrency` | `max_stable_concurrency` 与探测最高级别 | 最大稳定并发 ÷ 各 level 中最大并发 × 100 |
+| `reliability` | 所有 COMPLETED 插件的 `success_rate` | 各插件 `success_rate`（含 `levels`/`batches` 分组的 success_rate）的算术平均 × 100 |
+
+### 总分与维度分
+
+加权总分只对本次**有可用指标**的组件应用权重，并在这些组件之间自动归一化：
+
+```
+加权总分 = Σ(组件分 × 该组件权重) ÷ Σ(有指标组件的权重)
+```
+
+默认权重见上方配置示例（quality 30、latency 15、throughput 10、concurrency 15、reliability 10、cache 5、compatibility/protocol/structured_output/billing 各 4、tool_calling/features_thinking/model_identity/cost 各 3、tool_choice/features_param 各 2）。
+
+三维度分使用与总分相同的加权公式，仅在其成员组件内计算：
+
+- **网关合规 (gateway)**：compatibility、protocol、features_param、tool_choice、cache、model_identity、billing
+- **模型能力 (model)**：quality、structured_output、tool_calling、features_thinking
+- **性能 (performance)**：latency、throughput、concurrency、reliability、cost
+
+### 阈值参数与默认值
+
+| 参数 | 默认值 | 含义 |
+| --- | --- | --- |
+| `latency_ttft_good_ms` | `1000` | TTFT p95 ≤ 此值 → latency 因子 1.0 |
+| `latency_ttft_fail_ms` | `10000` | TTFT p95 ≥ 此值 → latency 因子 0.0 |
+| `output_tps_target` | `20` | throughput 满分对应的输出 TPS（p50） |
+| `warn_score_below` | `80` | 加权总分低于此值 → WARN |
+| `fail_score_below` | `60` | 加权总分低于此值 → FAIL |
+
+### 结论判定顺序
+
+1. 任一 `severity: fail` Gate 未通过，或加权总分 < `fail_score_below` → **FAIL**
+2. 无 Fail Gate 失败，但任一 `severity: warn` Gate 未通过，或加权总分 < `warn_score_below` → **WARN**
+3. 其余 → **PASS**
+
 ### 状态与结论不是同一概念
 
 - `COMPLETED`：执行引擎和插件正常完成。
@@ -743,6 +798,12 @@ FastAPI 交互文档位于 <http://127.0.0.1:8000/docs>。
 | `GET /api/runs/{run_id}/report` | 获取 HTML 报告 |
 
 ## 输出目录与结果解读
+
+每个 run 的目录名包含运行时间戳、被测平台（从 `base_url` 去掉 `http(s)://` 的 host 部分）和模型名，便于从文件名直接辨认，例如：
+
+```text
+outputs/20260827T035654Z-lynxtoncloud.com-kimi-k3-ab12cd34/
+```
 
 ### 单 Provider
 
